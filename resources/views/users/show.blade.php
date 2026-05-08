@@ -1,0 +1,210 @@
+@extends('admin.layouts.app')
+
+@section('title', 'Détails Utilisateur - ABBEV')
+@section('header', 'Détails de l\'utilisateur')
+
+@section('content')
+<!-- Back Button -->
+<div class="mb-6">
+    <a href="{{ route('users.index') }}" class="inline-flex items-center text-primary-400 hover:text-primary-300 transition">
+        <i class="fas fa-arrow-left mr-2"></i> Retour à la liste
+    </a>
+</div>
+
+<!-- User Info Card -->
+<div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6 mb-6">
+    <div class="flex items-center gap-6">
+        <div class="w-20 h-20 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center text-white font-bold text-3xl">
+            {{ strtoupper(substr($user->name, 0, 1)) }}
+        </div>
+        <div class="flex-1">
+            <h2 class="text-2xl font-bold text-white mb-1">{{ $user->name }}</h2>
+            <p class="text-gray-400">{{ $user->email }}</p>
+            <div class="flex items-center gap-4 mt-3">
+                <span class="text-sm text-gray-400">
+                    <i class="fas fa-calendar-alt mr-1"></i>
+                    Inscrit le {{ $user->created_at->format('d/m/Y') }}
+                </span>
+                @if($user->subscriptions()->where('status', 'active')->exists())
+                <span class="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm">
+                    <i class="fas fa-check-circle mr-1"></i> Abonné
+                </span>
+                @else
+                <span class="bg-gray-500/20 text-gray-400 px-3 py-1 rounded-full text-sm">
+                    <i class="fas fa-times-circle mr-1"></i> Non abonné
+                </span>
+                @endif
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+    <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-400">Abonnements</p>
+                <p class="text-2xl font-bold text-white mt-1">{{ $user->subscriptions()->count() }}</p>
+            </div>
+            <div class="w-12 h-12 bg-primary-500/20 rounded-lg flex items-center justify-center">
+                <i class="fas fa-crown text-xl text-primary-400"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-400">Transactions</p>
+                <p class="text-2xl font-bold text-white mt-1">{{ $user->transactions()->count() }}</p>
+            </div>
+            <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                <i class="fas fa-receipt text-xl text-blue-400"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-400">Total dépensé</p>
+                <p class="text-2xl font-bold text-white mt-1">{{ number_format($user->transactions()->where('status', 'completed')->sum('amount')) }} XAF</p>
+            </div>
+            <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
+                <i class="fas fa-money-bill-wave text-xl text-green-400"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Subscription -->
+@php
+    $activeSubscription = $user->subscriptions()->where('status', 'active')->with('plan')->latest()->first();
+@endphp
+
+@if($activeSubscription)
+<div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6 mb-6">
+    <h3 class="text-xl font-bold text-white mb-4">
+        <i class="fas fa-crown text-primary-400 mr-2"></i> Abonnement actif
+    </h3>
+    <div class="bg-dark-50 rounded-lg p-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <p class="text-sm text-gray-400 mb-1">Pack</p>
+                <p class="text-white font-medium">{{ $activeSubscription->plan->name }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-400 mb-1">Date de début</p>
+                <p class="text-white font-medium">{{ $activeSubscription->starts_at->format('d/m/Y') }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-400 mb-1">Date d'expiration</p>
+                <p class="text-white font-medium">{{ $activeSubscription->expires_at->format('d/m/Y') }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
+<!-- Subscriptions History -->
+<div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 overflow-hidden mb-6">
+    <div class="p-6 border-b border-dark-200">
+        <h3 class="text-xl font-bold text-white">
+            <i class="fas fa-history text-primary-400 mr-2"></i> Historique des abonnements
+        </h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-dark-50">
+                <tr>
+                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">Pack</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">Début</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">Expiration</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">Statut</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-dark-200">
+                @forelse($user->subscriptions()->with('plan')->latest()->get() as $subscription)
+                <tr class="hover:bg-dark-50 transition">
+                    <td class="px-6 py-4 text-white">{{ $subscription->plan->name }}</td>
+                    <td class="px-6 py-4 text-gray-300">{{ $subscription->starts_at->format('d/m/Y') }}</td>
+                    <td class="px-6 py-4 text-gray-300">{{ $subscription->expires_at->format('d/m/Y') }}</td>
+                    <td class="px-6 py-4">
+                        @if($subscription->status === 'active')
+                        <span class="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm">Actif</span>
+                        @elseif($subscription->status === 'expired')
+                        <span class="bg-gray-500/20 text-gray-400 px-3 py-1 rounded-full text-sm">Expiré</span>
+                        @else
+                        <span class="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-sm">Annulé</span>
+                        @endif
+                    </td>
+                </tr>
+                @empty
+                <tr>
+                    <td colspan="4" class="px-6 py-12 text-center text-gray-400">
+                        Aucun abonnement trouvé
+                    </td>
+                </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Transactions History -->
+<div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 overflow-hidden">
+    <div class="p-6 border-b border-dark-200">
+        <h3 class="text-xl font-bold text-white">
+            <i class="fas fa-receipt text-primary-400 mr-2"></i> Historique des transactions
+        </h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-dark-50">
+                <tr>
+                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">ID Transaction</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">Montant</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">Méthode</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">Date</th>
+                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase">Statut</th>
+                    <th class="px-6 py-4 text-center text-xs font-medium text-gray-400 uppercase">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-dark-200">
+                @forelse($user->transactions()->latest()->get() as $transaction)
+                <tr class="hover:bg-dark-50 transition">
+                    <td class="px-6 py-4 text-white font-mono text-sm">{{ $transaction->transaction_id }}</td>
+                    <td class="px-6 py-4 text-white font-medium">{{ number_format($transaction->amount) }} {{ $transaction->currency }}</td>
+                    <td class="px-6 py-4 text-gray-300 capitalize">{{ $transaction->payment_method }}</td>
+                    <td class="px-6 py-4 text-gray-400 text-sm">{{ $transaction->created_at->format('d/m/Y H:i') }}</td>
+                    <td class="px-6 py-4">
+                        @if($transaction->status === 'completed')
+                        <span class="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm">Complété</span>
+                        @elseif($transaction->status === 'pending')
+                        <span class="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-sm">En attente</span>
+                        @elseif($transaction->status === 'failed')
+                        <span class="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-sm">Échoué</span>
+                        @else
+                        <span class="bg-gray-500/20 text-gray-400 px-3 py-1 rounded-full text-sm">Annulé</span>
+                        @endif
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <a href="{{ route('transactions.show', $transaction) }}"
+                           class="bg-primary-500/20 hover:bg-primary-500 text-primary-400 hover:text-white px-3 py-2 rounded-lg text-sm transition">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                @empty
+                <tr>
+                    <td colspan="6" class="px-6 py-12 text-center text-gray-400">
+                        Aucune transaction trouvée
+                    </td>
+                </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+@endsection
