@@ -78,7 +78,21 @@ class WatchApiController extends Controller
      */
     public function movieDownload(Request $request, Media $movie): JsonResponse
     {
+        Log::info('[Download] ▶ movieDownload entry', [
+            'user_id'  => optional($request->user())->id,
+            'media_id' => $movie->id,
+            'type'     => $movie->type,
+            'provider' => $movie->video_provider,
+            'video_id' => $movie->video_id,
+            'ip'       => $request->ip(),
+            'ua'       => $request->userAgent(),
+        ]);
+
         if ($movie->type !== 'movie') {
+            Log::warning('[Download] ✗ wrong media type', [
+                'media_id' => $movie->id,
+                'type'     => $movie->type,
+            ]);
             return response()->json(['message' => 'Contenu introuvable.'], 404);
         }
 
@@ -96,6 +110,15 @@ class WatchApiController extends Controller
      */
     public function episodeDownload(Request $request, Episode $episode): JsonResponse
     {
+        Log::info('[Download] ▶ episodeDownload entry', [
+            'user_id'    => optional($request->user())->id,
+            'episode_id' => $episode->id,
+            'provider'   => $episode->video_provider,
+            'video_id'   => $episode->video_id,
+            'ip'         => $request->ip(),
+            'ua'         => $request->userAgent(),
+        ]);
+
         if ($denied = $this->guard($request, 'episode', $episode->id)) {
             return $denied;
         }
@@ -117,11 +140,21 @@ class WatchApiController extends Controller
     {
         $user = $request->user();
 
-        if (! $user->hasActiveSubscription()) {
-            Log::warning('[Watch] Access denied — no active subscription', [
-                'user_id' => $user->id,
+        if ($user === null) {
+            // En théorie inatteignable (auth:sanctum filtre avant), mais
+            // si jamais ça tombe ici on saura pourquoi côté logs.
+            Log::warning('[Watch/Download] ✗ guard sans user (auth manquante)', [
                 'type' => $type,
-                'id' => $id,
+                'id'   => $id,
+            ]);
+            return response()->json(['message' => 'Non authentifié.'], 401);
+        }
+
+        if (! $user->hasActiveSubscription()) {
+            Log::warning('[Watch/Download] ✗ Access denied — no active subscription', [
+                'user_id' => $user->id,
+                'type'    => $type,
+                'id'      => $id,
             ]);
 
             return response()->json([
@@ -191,26 +224,82 @@ class WatchApiController extends Controller
             ], 422);
         }
 
+        // Garde-fou : si Token Authentication est OFF côté Laravel (ou
+        // si le token_key est vide), `mp4Url()` retourne une URL non
+        // signée. Sur une library Bunny qui a la hotlink protection
+        // activée — c'est notre cas, vu que le streaming repose dessus —
+        // l'URL non signée renvoie 403 et l'app affiche "Échec".
+        // On préfère échouer ici avec un message explicite plutôt que
+        // de filer une URL qu'on sait condamnée.
+        $signingOn = (bool) config('services.bunny.signed_urls');
+        $tokenKey  = (string) config('services.bunny.token_key');
+        if (! $signingOn || $tokenKey === '') {
+            Log::error('[Download] ✗ refus : Bunny URL signing désactivé '
+                . '(signed_urls=' . var_export($signingOn, true)
+                . ', token_key_len=' . strlen($tokenKey) . '). '
+                . 'Activer BUNNY_STREAM_SIGNED_URLS=true et fournir '
+                . 'BUNNY_STREAM_TOKEN_KEY (Token Authentication Key '
+                . 'du dashboard Bunny).', [
+                'type' => $type,
+                'id'   => $model->id,
+            ]);
+            return response()->json([
+                'error'   => 'download_signing_disabled',
+                'message' => 'Le téléchargement n\'est pas disponible '
+                    . '(configuration serveur incomplète).',
+            ], 503);
+        }
+
         try {
             // On récupère les hauteurs MP4 réellement encodées par Bunny
             // pour cette vidéo. Évite de proposer un 1080p qui n'existe pas
             // (404 au download). Si l'appel échoue, on retombe sur 720p.
-            $available = $this->availableMp4Heights($bunny, $model->video_id);
+            $available = $this->availableMp4Heights($bunny, $model->video_id, $type, $model->id);
             $maxHeight = (int) config('services.bunny.download_max_height', 720);
             $chosen    = $this->pickHeight($available, $maxHeight);
+            Log::info('[Download] resolution chosen', [
+                'type'      => $type,
+                'id'        => $model->id,
+                'available' => $available,
+                'max'       => $maxHeight,
+                'chosen'    => $chosen,
+            ]);
 
             $expiresInSeconds = (int) config('services.bunny.download_token_ttl', 3600);
             $expiresAt        = time() + $expiresInSeconds;
             $downloadUrl      = $bunny->mp4Url($model->video_id, $chosen, $expiresInSeconds);
+
+            // DEBUG — composants utilisés pour signer. Permet de
+            // recalculer le token à la main et de vérifier que la clé
+            // dans .env correspond bien à celle du dashboard Bunny.
+            // À retirer une fois le download stable.
+            $path     = "/{$model->video_id}/play_{$chosen}p.mp4";
+            $keyLen   = strlen((string) config('services.bunny.token_key'));
+            $keyHead  = substr((string) config('services.bunny.token_key'), 0, 4);
+            $keyTail  = substr((string) config('services.bunny.token_key'), -4);
+            Log::info('[Download][debug] signed URL built', [
+                'type'              => $type,
+                'id'                => $model->id,
+                'height'            => $chosen,
+                'expires_in_sec'    => $expiresInSeconds,
+                'expires_unix'      => $expiresAt,
+                'signed_urls_on'    => (bool) config('services.bunny.signed_urls'),
+                'token_key_len'     => $keyLen,
+                'token_key_hint'    => $keyHead . '…' . $keyTail,
+                'signed_path'       => $path,
+                // URL complète pour repro hors-app (curl -I). À retirer
+                // si les logs de prod ne doivent pas contenir de signed URLs.
+                'url'               => $downloadUrl,
+            ]);
 
             // Taille du fichier : Bunny ne l'expose pas par hauteur dans
             // l'API publique. On fait un HEAD sur l'URL signée pour la
             // récupérer (Content-Length). Best-effort : si ça échoue,
             // l'app saura faire sans (et lira la taille au démarrage du
             // téléchargement via flutter_downloader).
-            $sizeBytes = $this->probeSize($downloadUrl);
+            $sizeBytes = $this->probeSize($downloadUrl, $type, $model->id);
 
-            Log::info('[Download] URL issued', [
+            Log::info('[Download] ✓ URL issued', [
                 'user_id'    => $request->user()->id,
                 'type'       => $type,
                 'id'         => $model->id,
@@ -230,10 +319,12 @@ class WatchApiController extends Controller
                 ],
             ]);
         } catch (\Throwable $e) {
-            Log::error('[Download] Failed to build URL', [
-                'type'    => $type,
-                'id'      => $model->id,
-                'message' => $e->getMessage(),
+            Log::error('[Download] ✗ Failed to build URL', [
+                'type'      => $type,
+                'id'        => $model->id,
+                'exception' => get_class($e),
+                'message'   => $e->getMessage(),
+                'file'      => $e->getFile() . ':' . $e->getLine(),
             ]);
 
             return response()->json([
@@ -248,11 +339,46 @@ class WatchApiController extends Controller
      * depuis le champ `availableResolutions` (CSV "240,360,480,720,1080").
      * Retourne un tableau d'entiers, vide si rien d'exploitable.
      */
-    private function availableMp4Heights(BunnyStreamService $bunny, string $guid): array
-    {
-        $video = $bunny->getVideo($guid);
-        $csv   = (string) ($video['availableResolutions'] ?? '');
+    private function availableMp4Heights(
+        BunnyStreamService $bunny,
+        string $guid,
+        ?string $type = null,
+        $modelId = null,
+    ): array {
+        try {
+            $video = $bunny->getVideo($guid);
+        } catch (\Throwable $e) {
+            // L'appel à /library/{id}/videos/{guid} peut 404 (vidéo supprimée
+            // côté Bunny) ou 401 (clé API tournée). On logue précisément :
+            // sans ça on voit juste "download_unavailable" côté app.
+            Log::error('[Download] ✗ Bunny getVideo failed', [
+                'type'     => $type,
+                'id'       => $modelId,
+                'guid'     => $guid,
+                'exception'=> get_class($e),
+                'message'  => $e->getMessage(),
+            ]);
+            return [];
+        }
+
+        $csv    = (string) ($video['availableResolutions'] ?? '');
+        $status = (string) ($video['status'] ?? '?');
+        $length = (int)    ($video['length'] ?? 0);
+        Log::info('[Download] Bunny getVideo OK', [
+            'type'                 => $type,
+            'id'                   => $modelId,
+            'guid'                 => $guid,
+            'bunny_status'         => $status,
+            'length_seconds'       => $length,
+            'available_resolutions'=> $csv,
+        ]);
         if ($csv === '') {
+            Log::warning('[Download] no availableResolutions for video — '
+                . 'encoding incomplete or Bunny library has MP4 fallback OFF', [
+                'type' => $type,
+                'id'   => $modelId,
+                'guid' => $guid,
+            ]);
             return [];
         }
 
@@ -281,21 +407,61 @@ class WatchApiController extends Controller
     /**
      * Récupère le Content-Length du MP4 via HEAD. Renvoie null si
      * indisponible (timeout, 4xx, header absent). Ne lève pas.
+     *
+     * Logue toujours le résultat — un HEAD qui répond 404 ici signifie
+     * que l'URL signée renverra aussi 404 au téléchargement côté app,
+     * c'est précieux pour diagnostiquer "Échec — réessayer".
      */
-    private function probeSize(string $url): ?int
+    private function probeSize(string $url, ?string $type = null, $modelId = null): ?int
     {
         try {
             $resp = \Illuminate\Support\Facades\Http::timeout(5)
                 ->withOptions(['allow_redirects' => true])
                 ->head($url);
 
+            $status = $resp->status();
+            $len    = $resp->header('Content-Length');
+            $ctype  = $resp->header('Content-Type');
+            Log::info('[Download] probe HEAD', [
+                'type'         => $type,
+                'id'           => $modelId,
+                'status'       => $status,
+                'content_type' => $ctype,
+                'content_len'  => $len,
+            ]);
+
             if (! $resp->successful()) {
+                // HEAD ne renvoie pas de body — pour avoir le message
+                // d'erreur réel de Bunny (token expired / IP mismatch /
+                // referer block…) on refait un GET Range 0-0 (1 octet)
+                // qui retourne le body d'erreur sans télécharger.
+                $bodySnippet = '(HEAD has no body)';
+                try {
+                    $get = \Illuminate\Support\Facades\Http::timeout(5)
+                        ->withHeaders(['Range' => 'bytes=0-0'])
+                        ->withOptions(['allow_redirects' => false])
+                        ->get($url);
+                    $bodySnippet = mb_substr((string) $get->body(), 0, 400);
+                } catch (\Throwable $eGet) {
+                    $bodySnippet = '(GET probe failed: ' . $eGet->getMessage() . ')';
+                }
+                Log::warning('[Download] ✗ probe HEAD non-2xx — '
+                    . 'le téléchargement côté app va probablement échouer pareil', [
+                    'type'         => $type,
+                    'id'           => $modelId,
+                    'status'       => $status,
+                    'bunny_error'  => $bodySnippet,
+                ]);
                 return null;
             }
-            $len = $resp->header('Content-Length');
 
             return $len === null || $len === '' ? null : (int) $len;
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::warning('[Download] probe HEAD threw', [
+                'type'    => $type,
+                'id'      => $modelId,
+                'message' => $e->getMessage(),
+            ]);
             return null;
         }
     }
