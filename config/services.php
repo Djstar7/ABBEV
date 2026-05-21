@@ -70,4 +70,23 @@ return [
         'max_duration'   => (int) env('KPAY_MAX_DURATION', 300),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Apple App Store Server API (In-App Purchase — abonnement auto-renouvelable)
+    |--------------------------------------------------------------------------
+    | Sert à vérifier les transactions StoreKit côté serveur et à traiter les
+    | App Store Server Notifications v2. La clé privée (.p8) est générée dans
+    | App Store Connect (Users and Access → Integrations → In-App Purchase).
+    |   - sandbox=true en dev/TestFlight, false en production.
+    |   - private_key : contenu PEM de la clé .p8 (ou chemin via APPLE_IAP_KEY_PATH).
+    */
+    'apple_iap' => [
+        'bundle_id'   => env('APPLE_IAP_BUNDLE_ID', 'com.abbev.abbev'),
+        'issuer_id'   => env('APPLE_IAP_ISSUER_ID'),
+        'key_id'      => env('APPLE_IAP_KEY_ID'),
+        'private_key' => env('APPLE_IAP_PRIVATE_KEY'),
+        'key_path'    => env('APPLE_IAP_KEY_PATH'),
+        'sandbox'     => (bool) env('APPLE_IAP_SANDBOX', true),
+    ],
+
 ];

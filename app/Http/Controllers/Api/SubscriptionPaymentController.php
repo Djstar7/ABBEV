@@ -10,6 +10,7 @@ use App\Models\UserSubscription;
 use App\Services\PayPalService;
 use App\Services\FreemopayService;
 use App\Services\KpayService;
+use App\Services\AppleAppStoreService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -20,15 +21,18 @@ class SubscriptionPaymentController extends Controller
     protected PayPalService $paypalService;
     protected FreemopayService $freemopayService;
     protected KpayService $kpayService;
+    protected AppleAppStoreService $appleService;
 
     public function __construct(
         PayPalService $paypalService,
         FreemopayService $freemopayService,
-        KpayService $kpayService
+        KpayService $kpayService,
+        AppleAppStoreService $appleService
     ) {
         $this->paypalService = $paypalService;
         $this->freemopayService = $freemopayService;
         $this->kpayService = $kpayService;
+        $this->appleService = $appleService;
     }
 
     /**
@@ -397,6 +401,219 @@ class SubscriptionPaymentController extends Controller
         // Provisionnement centralisé : gère souscription ET
         // renouvellement (cumul des jours), idempotent.
         UserSubscription::provisionFromTransaction($transaction);
+    }
+
+    /**
+     * Vérifier un achat In-App Apple et provisionner l'abonnement.
+     * POST /api/subscription-payment/apple/verify
+     *
+     * L'app iOS envoie le `transaction_id` StoreKit après un achat réussi.
+     * On interroge l'App Store Server API (source de vérité), on mappe le
+     * product au plan, puis on réutilise le pipeline d'abonnement existant.
+     */
+    public function verifyApple(Request $request)
+    {
+        $validated = $request->validate([
+            'transaction_id' => 'required|string',
+        ]);
+
+        $user = auth()->user();
+
+        try {
+            $result = $this->appleService->getTransaction($validated['transaction_id']);
+
+            if (!$result['success']) {
+                Log::warning('[SubscriptionPayment] Apple verify failed', [
+                    'user_id' => $user->id,
+                    'reason' => $result['message'] ?? 'unknown',
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'] ?? 'Vérification Apple échouée',
+                ], 400);
+            }
+
+            $payload = $result['payload'];
+
+            if (!$this->appleService->isTransactionValid($payload)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Transaction Apple invalide ou révoquée',
+                ], 400);
+            }
+
+            $transaction = $this->provisionAppleTransaction($payload, $user->id);
+
+            if (!$transaction) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Plan introuvable pour ce produit Apple',
+                ], 422);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Abonnement activé',
+                'transaction_id' => $transaction->transaction_id,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('[SubscriptionPayment] Apple verify error', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la vérification Apple',
+            ], 500);
+        }
+    }
+
+    /**
+     * App Store Server Notifications v2 (renouvellements, expirations, refunds).
+     * POST /api/webhooks/apple  (public, signé par Apple)
+     *
+     * Apple notifie sans que l'app soit ouverte : indispensable pour activer
+     * les renouvellements automatiques d'un abonnement auto-renouvelable.
+     */
+    public function appleWebhook(Request $request)
+    {
+        $signedPayload = $request->input('signedPayload');
+
+        if (!$signedPayload) {
+            return response()->json(['message' => 'No signedPayload'], 400);
+        }
+
+        $notification = $this->appleService->decodeNotification($signedPayload);
+
+        if (!$notification) {
+            return response()->json(['message' => 'Invalid payload'], 400);
+        }
+
+        $type = $notification['notificationType'] ?? null;
+        $signedTx = $notification['data']['signedTransactionInfo'] ?? null;
+        $payload = $signedTx ? $this->appleService->decodeNotification($signedTx) : null;
+
+        Log::info('[SubscriptionPayment] Apple notification', [
+            'type' => $type,
+            'subtype' => $notification['subtype'] ?? null,
+            'original_transaction_id' => $payload['originalTransactionId'] ?? null,
+        ]);
+
+        if (!$payload) {
+            // Acquittement systématique pour éviter les renvois Apple.
+            return response()->json(['message' => 'ok']);
+        }
+
+        // Renouvellement / réabonnement : on provisionne (cumul des jours,
+        // idempotent par transactionId). L'utilisateur est retrouvé via
+        // l'originalTransactionId d'une transaction Apple antérieure.
+        if (in_array($type, ['DID_RENEW', 'SUBSCRIBED', 'DID_CHANGE_RENEWAL_STATUS'], true)) {
+            $userId = $this->resolveAppleUserId($payload);
+            if ($userId) {
+                $this->provisionAppleTransaction($payload, $userId);
+            }
+        }
+
+        // Expiration / remboursement : on laisse le passage à expiration
+        // naturel (expires_at) gérer l'accès ; un refund révoque la transaction.
+        if (in_array($type, ['REFUND', 'EXPIRED', 'GRACE_PERIOD_EXPIRED'], true)) {
+            $this->revokeAppleTransaction($payload);
+        }
+
+        return response()->json(['message' => 'ok']);
+    }
+
+    /**
+     * Crée/complète une Transaction Apple et provisionne l'abonnement.
+     * Idempotent : un même `transactionId` Apple ne provisionne qu'une fois.
+     */
+    protected function provisionAppleTransaction(array $payload, int $userId): ?Transaction
+    {
+        $appleTxId = $payload['transactionId'] ?? null;
+        $productId = $payload['productId'] ?? null;
+
+        if (!$appleTxId || !$productId) {
+            return null;
+        }
+
+        $plan = SubscriptionPlan::where('apple_product_id', $productId)->first();
+
+        if (!$plan) {
+            Log::warning('[SubscriptionPayment] Apple product not mapped', [
+                'product_id' => $productId,
+            ]);
+
+            return null;
+        }
+
+        // Idempotence sur l'ID de transaction Apple.
+        $transaction = Transaction::where('external_reference', $appleTxId)
+            ->where('payment_method', 'apple_iap')
+            ->first();
+
+        if (!$transaction) {
+            $transaction = Transaction::create([
+                'user_id' => $userId,
+                'transaction_id' => 'TXN-' . strtoupper(Str::random(12)),
+                'payment_method' => 'apple_iap',
+                'type' => 'subscription',
+                'amount' => $plan->price,
+                'net_amount' => $plan->price,
+                'currency' => 'XAF',
+                'external_reference' => $appleTxId,
+                'description' => "Abonnement {$plan->name} (Apple)",
+                'status' => 'completed',
+                'completed_at' => now(),
+                'metadata' => [
+                    'subscription_plan_id' => $plan->id,
+                    'plan_name' => $plan->name,
+                    'duration_days' => $plan->duration_days,
+                    'apple_product_id' => $productId,
+                    'apple_original_transaction_id' => $payload['originalTransactionId'] ?? null,
+                ],
+            ]);
+
+            $this->createSubscription($transaction);
+        }
+
+        return $transaction;
+    }
+
+    /**
+     * Retrouve l'utilisateur lié à un abonnement Apple via une transaction
+     * antérieure portant le même originalTransactionId.
+     */
+    protected function resolveAppleUserId(array $payload): ?int
+    {
+        $originalId = $payload['originalTransactionId'] ?? null;
+
+        if (!$originalId) {
+            return null;
+        }
+
+        $prior = Transaction::where('payment_method', 'apple_iap')
+            ->where('metadata->apple_original_transaction_id', $originalId)
+            ->first();
+
+        return $prior?->user_id;
+    }
+
+    /**
+     * Marque la transaction Apple comme remboursée (révoquée).
+     */
+    protected function revokeAppleTransaction(array $payload): void
+    {
+        $appleTxId = $payload['transactionId'] ?? null;
+
+        if (!$appleTxId) {
+            return;
+        }
+
+        Transaction::where('external_reference', $appleTxId)
+            ->where('payment_method', 'apple_iap')
+            ->update(['status' => 'failed']);
     }
 
     /**

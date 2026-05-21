@@ -9,107 +9,27 @@ class SubscriptionPlanSeeder extends Seeder
 {
     public function run(): void
     {
-        $plans = [
+        // Offre unique ABBEV : un seul abonnement à 2500 FCFA / mois qui
+        // donne accès à tout le catalogue. `apple_product_id` mappe ce plan
+        // à l'abonnement auto-renouvelable déclaré dans App Store Connect.
+        SubscriptionPlan::updateOrCreate(
+            ['name' => 'ABBEV'],
             [
-                'name' => 'Gratuit',
-                'description' => 'Accès limité avec publicités',
-                'price' => 0,
-                'duration_days' => 30,
-                'features' => [
-                    'Visionnage en SD',
-                    'Publicités',
-                    'Accès limité au catalogue',
-                    '1 écran simultané'
-                ],
-                'is_active' => true,
-                'is_popular' => false,
-                'order' => 1
-            ],
-            [
-                'name' => 'Basic',
-                'description' => 'Pour un usage personnel',
+                'description' => 'Accès complet à tout le catalogue ABBEV',
                 'price' => 2500,
                 'duration_days' => 30,
                 'features' => [
-                    'Visionnage HD',
+                    'Catalogue complet (films & séries)',
                     'Sans publicité',
-                    'Catalogue complet',
-                    '1 écran simultané',
-                    'Téléchargement (5 contenus)'
-                ],
-                'is_active' => true,
-                'is_popular' => false,
-                'order' => 2
-            ],
-            [
-                'name' => 'Standard',
-                'description' => 'Pour partager en famille',
-                'price' => 5000,
-                'duration_days' => 30,
-                'features' => [
                     'Visionnage Full HD',
-                    'Sans publicité',
-                    'Catalogue complet + Exclusivités',
-                    '2 écrans simultanés',
-                    'Téléchargement illimité',
-                    'Accès prioritaire aux nouveautés'
+                    'Téléchargement hors-ligne illimité',
+                    'Nouveautés et exclusivités',
                 ],
                 'is_active' => true,
                 'is_popular' => true,
-                'order' => 3
-            ],
-            [
-                'name' => 'Premium',
-                'description' => 'L\'expérience ultime',
-                'price' => 10000,
-                'duration_days' => 30,
-                'features' => [
-                    'Visionnage 4K + HDR',
-                    'Sans publicité',
-                    'Catalogue complet + Avant-premières',
-                    '4 écrans simultanés',
-                    'Téléchargement illimité',
-                    'Contenu exclusif Premium',
-                    'Support prioritaire 24/7',
-                    'Invitations événements ABBEV'
-                ],
-                'is_active' => true,
-                'is_popular' => false,
-                'order' => 4
-            ],
-            [
-                'name' => 'Annuel Basic',
-                'description' => 'Basic - 12 mois (économisez 20%)',
-                'price' => 24000, // 2500 * 12 * 0.8
-                'duration_days' => 365,
-                'features' => [
-                    'Toutes les fonctionnalités Basic',
-                    '20% de réduction',
-                    'Facturé annuellement'
-                ],
-                'is_active' => true,
-                'is_popular' => false,
-                'order' => 5
-            ],
-            [
-                'name' => 'Annuel Premium',
-                'description' => 'Premium - 12 mois (économisez 25%)',
-                'price' => 90000, // 10000 * 12 * 0.75
-                'duration_days' => 365,
-                'features' => [
-                    'Toutes les fonctionnalités Premium',
-                    '25% de réduction',
-                    'Facturé annuellement',
-                    '2 mois offerts'
-                ],
-                'is_active' => true,
-                'is_popular' => false,
-                'order' => 6
+                'order' => 1,
+                'apple_product_id' => 'com.abbev.sub.monthly',
             ]
-        ];
-
-        foreach ($plans as $plan) {
-            SubscriptionPlan::create($plan);
-        }
+        );
     }
 }

@@ -153,6 +153,9 @@ Route::middleware('auth:sanctum')->prefix('subscription-payment')->group(functio
     // KPay — paiement
     Route::get('/kpay/status/{reference}', [SubscriptionPaymentController::class, 'checkKpayStatus']);
 
+    // Apple In-App Purchase (iOS) — vérification d'un achat StoreKit.
+    Route::post('/apple/verify', [SubscriptionPaymentController::class, 'verifyApple']);
+
     // Historique de paiement (paginé) + dernière transaction KPay pending.
     Route::get('/transactions', [TransactionApiController::class, 'index']);
     Route::get('/pending',      [TransactionApiController::class, 'pendingPayment']);
@@ -160,3 +163,5 @@ Route::middleware('auth:sanctum')->prefix('subscription-payment')->group(functio
 
 // Webhooks
 Route::post('/webhooks/freemopay', [SubscriptionPaymentController::class, 'freemopayWebhook']);
+// App Store Server Notifications v2 (renouvellements/expirations/refunds Apple).
+Route::post('/webhooks/apple', [SubscriptionPaymentController::class, 'appleWebhook']);
