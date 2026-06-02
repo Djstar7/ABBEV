@@ -3,10 +3,14 @@
 use App\Http\Controllers\Api\AdminMediaApiController;
 use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\CategoryApiController;
+use App\Http\Controllers\Api\CryptoPaymentController;
 use App\Http\Controllers\Api\EpisodeApiController;
 use App\Http\Controllers\Api\LocaleApiController;
 use App\Http\Controllers\Api\MediaApiController;
 use App\Http\Controllers\Api\MyListApiController;
+use App\Http\Controllers\Api\ReservationPaymentController;
+use App\Http\Controllers\Api\ScreeningApiController;
+use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\SubscriptionPaymentController;
 use App\Http\Controllers\Api\SubscriptionPlanApiController;
 use App\Http\Controllers\Api\TransactionApiController;
@@ -80,6 +84,21 @@ Route::prefix('v1')->group(function () {
     // -------------------------------------------------------------
     Route::get('/countries',  [LocaleApiController::class, 'countries']);
     Route::get('/currencies', [LocaleApiController::class, 'currencies']);
+
+    // -------------------------------------------------------------
+    // Séances cinéma + réservation de tickets
+    // -------------------------------------------------------------
+    // Public : consultation des séances réservables.
+    Route::get('/screenings',            [ScreeningApiController::class, 'index']);
+    Route::get('/screenings/{screening}', [ScreeningApiController::class, 'show']);
+
+    // Protégé : réservation + paiement + gestion de ses réservations.
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/reservations',                         [ScreeningApiController::class, 'reserve']);
+        Route::get('/reservations',                          [ScreeningApiController::class, 'myReservations']);
+        Route::post('/reservations/{reservation}/confirm',   [ScreeningApiController::class, 'confirm']);
+        Route::post('/reservations/{reservation}/cancel',    [ScreeningApiController::class, 'cancel']);
+    });
 
     // -------------------------------------------------------------
     // PROTÉGÉ — URLs de lecture (abonnement payant actif requis)
@@ -156,12 +175,49 @@ Route::middleware('auth:sanctum')->prefix('subscription-payment')->group(functio
     // Apple In-App Purchase (iOS) — vérification d'un achat StoreKit.
     Route::post('/apple/verify', [SubscriptionPaymentController::class, 'verifyApple']);
 
+    // Stripe (carte — abonnement, Android uniquement côté app).
+    Route::post('/stripe/confirm', [SubscriptionPaymentController::class, 'confirmStripe']);
+
     // Historique de paiement (paginé) + dernière transaction KPay pending.
     Route::get('/transactions', [TransactionApiController::class, 'index']);
     Route::get('/pending',      [TransactionApiController::class, 'pendingPayment']);
+});
+
+// -------------------------------------------------------------
+// Paiement des réservations de tickets (PayPal / KPay)
+// -------------------------------------------------------------
+Route::middleware('auth:sanctum')->prefix('reservation-payment')->group(function () {
+    Route::post('/initiate',                   [ReservationPaymentController::class, 'initiate']);
+    Route::post('/paypal/capture',             [ReservationPaymentController::class, 'capturePayPal']);
+    Route::post('/stripe/confirm',             [ReservationPaymentController::class, 'confirmStripe']);
+    Route::get('/kpay/status/{reference}',      [ReservationPaymentController::class, 'checkKpayStatus']);
+});
+
+// -------------------------------------------------------------
+// Paiement par crypto-monnaie (BTC, ETH, USDT…) via NOWPayments
+// Couvre abonnements ET réservations de tickets (champ `purpose`).
+// -------------------------------------------------------------
+Route::get('/crypto-payment/config', [CryptoPaymentController::class, 'config']);
+Route::middleware('auth:sanctum')->prefix('crypto-payment')->group(function () {
+    Route::post('/initiate',             [CryptoPaymentController::class, 'initiate']);
+    Route::get('/status/{transactionId}', [CryptoPaymentController::class, 'status']);
+});
+
+// -------------------------------------------------------------
+// Config publique Stripe (clé publishable pour init du SDK mobile)
+// -------------------------------------------------------------
+Route::get('/payments/stripe/config', function (\App\Services\StripeService $stripe) {
+    return response()->json([
+        'enabled'         => $stripe->isConfigured(),
+        'publishable_key' => $stripe->publishableKey(),
+    ]);
 });
 
 // Webhooks
 Route::post('/webhooks/freemopay', [SubscriptionPaymentController::class, 'freemopayWebhook']);
 // App Store Server Notifications v2 (renouvellements/expirations/refunds Apple).
 Route::post('/webhooks/apple', [SubscriptionPaymentController::class, 'appleWebhook']);
+// Stripe — source de vérité des paiements carte (payment_intent.succeeded).
+Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle']);
+// NOWPayments — IPN crypto (signé HMAC-SHA512, header x-nowpayments-sig).
+Route::post('/webhooks/nowpayments', [CryptoPaymentController::class, 'webhook']);

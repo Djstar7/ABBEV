@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Configuration;
 use App\Models\Transaction;
 use App\Models\UserSubscription;
+use App\Services\ReservationService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -77,6 +78,9 @@ class KpayService
 
                 if ($transaction->type === 'subscription') {
                     UserSubscription::provisionFromTransaction($transaction);
+                } elseif ($transaction->type === 'purchase') {
+                    // Réservation de ticket : confirmer + décompter le stock.
+                    app(ReservationService::class)->confirmFromTransaction($transaction);
                 }
 
                 Log::info('[KpayService] Transaction reconciled as completed', [

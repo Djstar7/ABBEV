@@ -47,6 +47,18 @@ class ConfigurationSeeder extends Seeder
             ['key' => 'min_withdrawal_amount', 'value' => '100', 'group' => 'system', 'description' => 'Montant minimum de retrait (FCFA)', 'is_secret' => false],
 
             // ============================================
+            // MODE VIDÉO (Production Bunny vs Test/Dev sample public)
+            // ============================================
+            // `video_mode` = 'production' → lecture via Bunny Stream (config .env).
+            //              = 'test'       → lecture d'une vidéo d'échantillon
+            //                               publique (HLS/MP4), sans toucher Bunny.
+            // Permet de présenter/tester le catalogue (belles affiches TMDB déjà
+            // seedées) sans consommer le quota Bunny ni dépendre de sa config.
+            ['key' => 'video_mode', 'value' => 'production', 'group' => 'video_mode', 'description' => 'Mode de lecture vidéo', 'is_secret' => false],
+            ['key' => 'video_test_sample_hls', 'value' => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', 'group' => 'video_mode', 'description' => 'URL HLS d\'échantillon (mode test)', 'is_secret' => false],
+            ['key' => 'video_test_sample_mp4', 'value' => 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 'group' => 'video_mode', 'description' => 'URL MP4 d\'échantillon — téléchargement (mode test)', 'is_secret' => false],
+
+            // ============================================
             // PAYPAL
             // ============================================
             ['key' => 'paypal_mode', 'value' => 'sandbox', 'group' => 'paypal', 'description' => 'Mode (sandbox ou live)', 'is_secret' => false],
@@ -54,6 +66,20 @@ class ConfigurationSeeder extends Seeder
             ['key' => 'paypal_client_secret', 'value' => '', 'group' => 'paypal', 'description' => 'Client Secret PayPal', 'is_secret' => true],
             ['key' => 'paypal_currency', 'value' => 'USD', 'group' => 'paypal', 'description' => 'Devise PayPal', 'is_secret' => false],
             ['key' => 'paypal_exchange_rate', 'value' => '655', 'group' => 'paypal', 'description' => 'Taux de change USD vers XAF', 'is_secret' => false],
+
+            // ============================================
+            // STRIPE (carte VISA / Mastercard)
+            // ============================================
+            // Tickets : Android + iOS. Abonnements : Android uniquement
+            // (iOS reste sur Apple IAP — guideline App Store 3.1.1).
+            // Le toggle `stripe_mode` bascule entre clés test (sandbox) et
+            // live : il suffit de renseigner les clés correspondantes.
+            ['key' => 'stripe_enabled', 'value' => '0', 'group' => 'stripe', 'description' => 'Activer les paiements par carte Stripe', 'is_secret' => false],
+            ['key' => 'stripe_mode', 'value' => 'test', 'group' => 'stripe', 'description' => 'Mode (test ou live)', 'is_secret' => false],
+            ['key' => 'stripe_publishable_key', 'value' => '', 'group' => 'stripe', 'description' => 'Clé publishable (pk_test_… / pk_live_…)', 'is_secret' => false],
+            ['key' => 'stripe_secret_key', 'value' => '', 'group' => 'stripe', 'description' => 'Clé secrète (sk_test_… / sk_live_…)', 'is_secret' => true],
+            ['key' => 'stripe_webhook_secret', 'value' => '', 'group' => 'stripe', 'description' => 'Secret de signature du webhook (whsec_…)', 'is_secret' => true],
+            ['key' => 'stripe_currency', 'value' => 'xaf', 'group' => 'stripe', 'description' => 'Devise Stripe (ISO 4217 minuscule, ex: xaf)', 'is_secret' => false],
 
             // ============================================
             // FEDAPAY
@@ -91,6 +117,26 @@ class ConfigurationSeeder extends Seeder
             ['key' => 'kpay_api_key', 'value' => '', 'group' => 'kpay', 'description' => 'API Key KPay', 'is_secret' => true],
             ['key' => 'kpay_secret_key', 'value' => '', 'group' => 'kpay', 'description' => 'Secret Key KPay', 'is_secret' => true],
             ['key' => 'kpay_max_duration', 'value' => '300', 'group' => 'kpay', 'description' => 'Durée max attente statut final (secondes)', 'is_secret' => false],
+
+            // ============================================
+            // NOWPAYMENTS (Crypto : BTC, ETH, USDT…)
+            // ============================================
+            // Invoice hébergée NOWPayments. Montants saisis en XAF/FCFA puis
+            // convertis en USD via `nowpayments_exchange_rate`. La confirmation
+            // arrive par IPN signé HMAC-SHA512 (header x-nowpayments-sig) sur
+            // /api/webhooks/nowpayments — pensez à renseigner l'IPN secret côté
+            // dashboard NOWPayments avec la même valeur que `nowpayments_ipn_secret`.
+            ['key' => 'nowpayments_enabled', 'value' => '1', 'group' => 'nowpayments', 'description' => 'Activer les paiements crypto (NOWPayments)', 'is_secret' => false],
+            ['key' => 'nowpayments_mode', 'value' => 'sandbox', 'group' => 'nowpayments', 'description' => 'Mode (sandbox ou live)', 'is_secret' => false],
+            ['key' => 'nowpayments_api_key', 'value' => '65NMPEB-AZK4WC3-GM230BZ-DR2Z08R', 'group' => 'nowpayments', 'description' => 'API Key NOWPayments', 'is_secret' => true],
+            ['key' => 'nowpayments_ipn_secret', 'value' => '0zSD7zQ6du0BQ8LBXRSrWG6p+19wh0Xf', 'group' => 'nowpayments', 'description' => 'IPN Secret (signature webhook HMAC-SHA512)', 'is_secret' => true],
+            ['key' => 'nowpayments_exchange_rate', 'value' => '655', 'group' => 'nowpayments', 'description' => 'Taux de change USD vers XAF', 'is_secret' => false],
+            ['key' => 'nowpayments_min_amount_xaf', 'value' => '13000', 'group' => 'nowpayments', 'description' => 'Montant minimum (FCFA) — ~20 USD, couvre les frais réseau BTC/ETH', 'is_secret' => false],
+            // URL publique de réception de l'IPN (webhook). Laisser vide en prod
+            // pour utiliser automatiquement APP_URL/api/webhooks/nowpayments. En
+            // dev, renseigner l'URL ngrok (ex : https://xxxx.ngrok-free.dev) —
+            // on y ajoutera /api/webhooks/nowpayments automatiquement.
+            ['key' => 'nowpayments_callback_url', 'value' => '', 'group' => 'nowpayments', 'description' => 'URL publique du webhook IPN (vide = APP_URL). Ex dev: URL ngrok', 'is_secret' => false],
 
             // ============================================
             // NEXAH SMS

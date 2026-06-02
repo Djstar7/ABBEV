@@ -135,6 +135,12 @@
                         Catégories
                     </a>
 
+                    <a href="{{ route('screenings.index') }}"
+                       class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('screenings.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
+                        <i class="fas fa-ticket-alt w-5 mr-3"></i>
+                        Séances cinéma
+                    </a>
+
                     <a href="{{ route('admin.bunny.library') }}"
                        class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('admin.bunny.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
                         <i class="fas fa-cloud w-5 mr-3"></i>

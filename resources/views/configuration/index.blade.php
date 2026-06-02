@@ -23,10 +23,13 @@
         'general'       => ['icon' => 'fas fa-cog',          'color' => 'text-primary-400', 'label' => 'Général'],
         'maintenance'   => ['icon' => 'fas fa-tools',        'color' => 'text-orange-400',  'label' => 'Maintenance'],
         'system'        => ['icon' => 'fas fa-server',       'color' => 'text-cyan-400',    'label' => 'Système'],
+        'video_mode'    => ['icon' => 'fas fa-video',        'color' => 'text-fuchsia-400', 'label' => 'Mode Vidéo'],
         'paypal'        => ['icon' => 'fab fa-paypal',       'color' => 'text-blue-400',    'label' => 'PayPal'],
+        'stripe'        => ['icon' => 'fab fa-cc-stripe',    'color' => 'text-violet-400',  'label' => 'Stripe (Carte)'],
         'fedapay'       => ['icon' => 'fas fa-credit-card',  'color' => 'text-indigo-400',  'label' => 'FedaPay'],
         'freemopay'     => ['icon' => 'fas fa-wallet',       'color' => 'text-green-400',   'label' => 'FreeMoPay'],
         'kpay'          => ['icon' => 'fas fa-mobile-alt',   'color' => 'text-emerald-400', 'label' => 'KPay'],
+        'nowpayments'   => ['icon' => 'fab fa-bitcoin',      'color' => 'text-amber-400',   'label' => 'Crypto (NOWPayments)'],
         'nexah_sms'     => ['icon' => 'fas fa-sms',          'color' => 'text-purple-400',  'label' => 'Nexah SMS'],
         'whatsapp'      => ['icon' => 'fab fa-whatsapp',     'color' => 'text-green-400',   'label' => 'WhatsApp Business'],
         'promo'         => ['icon' => 'fas fa-tag',          'color' => 'text-yellow-400',  'label' => 'Code Promo'],
@@ -111,6 +114,15 @@
                             </button>
                         </div>
 
+                        @elseif($config->key === 'video_mode')
+                        <!-- Mode Vidéo : Production (Bunny) ou Test/Dev (sample public) -->
+                        <select name="configs[{{ $config->key }}]"
+                                id="config_{{ $config->key }}"
+                                class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500 transition">
+                            <option value="production" {{ old('configs.' . $config->key, $config->value) === 'production' ? 'selected' : '' }}>🟢 Production — Bunny Stream</option>
+                            <option value="test" {{ old('configs.' . $config->key, $config->value) === 'test' ? 'selected' : '' }}>🧪 Test / Dev — vidéo d'échantillon</option>
+                        </select>
+
                         @elseif(str_contains($config->key, 'mode'))
                         <!-- Mode Selector (Sandbox/Live) -->
                         <select name="configs[{{ $config->key }}]"
@@ -163,6 +175,16 @@
                         @endforeach
                     </div>
                 </div>
+
+                @if($group === 'video_mode')
+                <div class="px-6 pb-2 -mt-2">
+                    <div class="bg-fuchsia-500/10 border border-fuchsia-500/30 rounded-lg p-4 text-sm text-fuchsia-200">
+                        <p class="font-medium text-fuchsia-300 mb-1"><i class="fas fa-circle-info mr-1"></i> Comment ça marche</p>
+                        <p class="mb-1"><strong>Production</strong> : chaque film/épisode est lu via sa vidéo Bunny Stream (configuration <code>.env</code>, inchangée).</p>
+                        <p><strong>Test / Dev</strong> : tout le catalogue lit la vidéo d'échantillon publique ci-dessus, sans toucher à Bunny — idéal pour présenter le catalogue (affiches, synopsis) sans consommer de quota.</p>
+                    </div>
+                </div>
+                @endif
 
                 <!-- Action Buttons (par groupe) -->
                 <div class="bg-dark-50 px-6 py-4 border-t border-dark-200 flex gap-4">

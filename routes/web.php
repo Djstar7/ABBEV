@@ -73,6 +73,11 @@ Route::middleware('auth')->prefix('admin')->group(function () {
     Route::post('/administrators', [App\Http\Controllers\AdminUserController::class, 'store'])->name('administrators.store');
     Route::delete('/administrators/{user}', [App\Http\Controllers\AdminUserController::class, 'destroy'])->name('administrators.destroy');
     
+    // Séances cinéma (réservation de tickets payants)
+    Route::resource('screenings', App\Http\Controllers\ScreeningController::class)
+        ->except(['show']);
+    Route::post('/screenings/{screening}/cancel', [App\Http\Controllers\ScreeningController::class, 'cancel'])->name('screenings.cancel');
+
     Route::resource('subscription-plans', App\Http\Controllers\SubscriptionPlanController::class);
     Route::get('/transactions', [App\Http\Controllers\TransactionController::class, 'index'])->name('transactions.index');
     Route::get('/transactions/{transaction}', [App\Http\Controllers\TransactionController::class, 'show'])->name('transactions.show');

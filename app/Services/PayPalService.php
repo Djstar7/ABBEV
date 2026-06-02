@@ -36,6 +36,14 @@ class PayPalService
     }
 
     /**
+     * Les identifiants PayPal sont-ils renseignés (dashboard → Configuration) ?
+     */
+    public function isConfigured(): bool
+    {
+        return !empty($this->clientId) && !empty($this->clientSecret);
+    }
+
+    /**
      * Generate OAuth 2.0 access token
      */
     public function generateAccessToken(): ?string

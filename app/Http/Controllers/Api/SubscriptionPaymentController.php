@@ -11,6 +11,7 @@ use App\Services\PayPalService;
 use App\Services\FreemopayService;
 use App\Services\KpayService;
 use App\Services\AppleAppStoreService;
+use App\Services\StripeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -22,17 +23,20 @@ class SubscriptionPaymentController extends Controller
     protected FreemopayService $freemopayService;
     protected KpayService $kpayService;
     protected AppleAppStoreService $appleService;
+    protected StripeService $stripeService;
 
     public function __construct(
         PayPalService $paypalService,
         FreemopayService $freemopayService,
         KpayService $kpayService,
-        AppleAppStoreService $appleService
+        AppleAppStoreService $appleService,
+        StripeService $stripeService
     ) {
         $this->paypalService = $paypalService;
         $this->freemopayService = $freemopayService;
         $this->kpayService = $kpayService;
         $this->appleService = $appleService;
+        $this->stripeService = $stripeService;
     }
 
     /**
@@ -43,7 +47,7 @@ class SubscriptionPaymentController extends Controller
     {
         $validated = $request->validate([
             'subscription_plan_id' => 'required|exists:subscription_plans,id',
-            'payment_method' => 'required|in:paypal,freemopay,kpay',
+            'payment_method' => 'required|in:paypal,freemopay,kpay,stripe',
             'phone_number' => 'required_if:payment_method,freemopay|required_if:payment_method,kpay|string',
             'mobile_operator' => 'required_if:payment_method,kpay|in:MTN_MONEY,ORANGE_MONEY',
         ]);
@@ -129,6 +133,65 @@ class SubscriptionPaymentController extends Controller
                     'payment_method' => 'paypal',
                     'approval_url' => $result['approval_url'],
                     'order_id' => $result['order_id'],
+                ]);
+
+            } elseif ($validated['payment_method'] === 'stripe') {
+                // Carte (Stripe) — abonnement, Android uniquement côté app.
+                // Crée un PaymentIntent ; la confirmation passe par le webhook
+                // (source de vérité) + /stripe/confirm depuis l'app.
+                if (!$this->stripeService->isConfigured()) {
+                    $transaction->update(['status' => 'failed']);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Le paiement par carte n\'est pas disponible pour le moment.',
+                    ], 503);
+                }
+
+                $result = $this->stripeService->createPaymentIntent([
+                    'amount'      => (float) $plan->price,
+                    'description' => "Abonnement {$plan->name}",
+                    'metadata'    => [
+                        'transaction_id'       => $transaction->transaction_id,
+                        'subscription_plan_id' => $plan->id,
+                        'type'                 => 'subscription',
+                    ],
+                ]);
+
+                if (!$result['success']) {
+                    $transaction->update(['status' => 'failed']);
+
+                    Log::warning('[SubscriptionPayment] Stripe init failed', [
+                        'transaction_id' => $transaction->transaction_id,
+                        'user_id' => $user->id,
+                        'reason' => $result['message'] ?? 'unknown',
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => $result['message'] ?? 'Échec de l\'initialisation Stripe',
+                    ], 400);
+                }
+
+                $transaction->update([
+                    'external_reference' => $result['payment_intent_id'],
+                    'metadata' => array_merge($transaction->metadata, [
+                        'stripe_payment_intent_id' => $result['payment_intent_id'],
+                    ]),
+                ]);
+
+                Log::info('[SubscriptionPayment] Stripe PaymentIntent created', [
+                    'transaction_id' => $transaction->transaction_id,
+                    'user_id' => $user->id,
+                    'payment_intent_id' => $result['payment_intent_id'],
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'transaction_id' => $transaction->transaction_id,
+                    'payment_method' => 'stripe',
+                    'client_secret' => $result['client_secret'],
+                    'publishable_key' => $result['publishable_key'],
+                    'payment_intent_id' => $result['payment_intent_id'],
                 ]);
 
             } elseif ($validated['payment_method'] === 'kpay') {
@@ -314,6 +377,65 @@ class SubscriptionPaymentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors de la capture du paiement',
+            ], 500);
+        }
+    }
+
+    /**
+     * Confirmer un paiement Stripe après PaymentSheet réussi.
+     * POST /api/subscription-payment/stripe/confirm
+     *
+     * Le webhook reste la source de vérité ; cet endpoint active l'abonnement
+     * immédiatement en revérifiant le statut du PaymentIntent. Idempotent.
+     */
+    public function confirmStripe(Request $request)
+    {
+        $validated = $request->validate([
+            'payment_intent_id' => 'required|string',
+        ]);
+
+        try {
+            $transaction = Transaction::where('external_reference', $validated['payment_intent_id'])
+                ->where('payment_method', 'stripe')
+                ->firstOrFail();
+
+            $result = $this->stripeService->retrievePaymentIntent($validated['payment_intent_id']);
+
+            if (!$result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'] ?? 'Vérification Stripe impossible',
+                ], 400);
+            }
+
+            if (($result['status'] ?? null) !== 'succeeded') {
+                return response()->json([
+                    'success' => true,
+                    'status' => 'pending',
+                    'message' => 'Paiement en cours de traitement',
+                ]);
+            }
+
+            if ($transaction->status !== 'completed') {
+                $transaction->update(['status' => 'completed', 'completed_at' => now()]);
+                $this->createSubscription($transaction);
+            }
+
+            return response()->json([
+                'success' => true,
+                'status' => 'completed',
+                'message' => 'Paiement effectué avec succès',
+                'transaction_id' => $transaction->transaction_id,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('[SubscriptionPayment] Error confirming Stripe payment', [
+                'error' => $e->getMessage(),
+                'payment_intent_id' => $validated['payment_intent_id'],
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la confirmation du paiement',
             ], 500);
         }
     }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Configuration;
 use App\Models\Episode;
 use App\Models\Media;
 use App\Services\BunnyStreamService;
@@ -172,6 +173,17 @@ class WatchApiController extends Controller
      */
     private function resolveUrls(Media|Episode $model): array
     {
+        // Mode test/dev : on sert la même vidéo d'échantillon publique pour
+        // tout le catalogue, sans toucher Bunny (cf. /admin/configuration →
+        // « Mode Vidéo »). Permet de présenter le catalogue sans quota Bunny.
+        if ($this->isTestMode()) {
+            return [
+                'videoUrl' => $this->sampleHls(),
+                'embedUrl' => null,
+                'videoProvider' => 'sample',
+            ];
+        }
+
         $bunny = app(BunnyStreamService::class);
 
         if ($model->video_provider === 'bunny' && $model->video_id && $bunny->isConfigured()) {
@@ -192,6 +204,34 @@ class WatchApiController extends Controller
     }
 
     /**
+     * Mode vidéo « test/dev » activé dans /admin/configuration ?
+     * Quand actif, tout le catalogue lit une vidéo d'échantillon publique
+     * au lieu de Bunny. Par défaut (clé absente) → production.
+     */
+    private function isTestMode(): bool
+    {
+        return Configuration::getValue('video_mode', 'production') === 'test';
+    }
+
+    /** URL HLS d'échantillon servie en mode test. */
+    private function sampleHls(): string
+    {
+        return (string) Configuration::getValue(
+            'video_test_sample_hls',
+            'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        );
+    }
+
+    /** URL MP4 d'échantillon (téléchargement) servie en mode test. */
+    private function sampleMp4(): string
+    {
+        return (string) Configuration::getValue(
+            'video_test_sample_mp4',
+            'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        );
+    }
+
+    /**
      * Construit la réponse de téléchargement : URL MP4 signée + métadonnées
      * utiles côté app (taille, expiration, filename).
      *
@@ -206,6 +246,32 @@ class WatchApiController extends Controller
         string $type,
         string $label,
     ): JsonResponse {
+        // Mode test/dev : on renvoie directement l'URL MP4 d'échantillon
+        // publique (pas de signature, pas de HEAD Bunny). Le HEAD reste
+        // best-effort pour récupérer la taille si possible.
+        if ($this->isTestMode()) {
+            $downloadUrl = $this->sampleMp4();
+            $sizeBytes   = $this->probeSize($downloadUrl, $type, $model->id);
+
+            Log::info('[Download] ✓ URL issued (test mode sample)', [
+                'user_id'    => $request->user()->id,
+                'type'       => $type,
+                'id'         => $model->id,
+                'size_bytes' => $sizeBytes,
+            ]);
+
+            return response()->json([
+                'data' => [
+                    'downloadUrl' => $downloadUrl,
+                    'expiresAt'   => null,
+                    'sizeBytes'   => $sizeBytes,
+                    'contentType' => 'video/mp4',
+                    'height'      => null,
+                    'filename'    => $this->safeFilename($label) . '.mp4',
+                ],
+            ]);
+        }
+
         $bunny = app(BunnyStreamService::class);
 
         if ($model->video_provider !== 'bunny'

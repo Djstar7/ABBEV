@@ -75,9 +75,14 @@ class MediaSeeder extends Seeder
         $this->purgePreviousDemoData();
 
         /* ---------------------------------------------------------------
-         |  FILMS — on garde les 100 premiers du catalogue
+         |  FILMS — on parcourt le catalogue et on ne RETIENT que les
+         |  titres dont le media est réellement servable :
+         |   - vidéo Bunny présente (toujours vrai ici, garde-fou),
+         |   - poster ET backdrop TMDB répondant 200 (sinon image cassée
+         |     côté app mobile → on ne veut pas seeder ce contenu).
+         |  On s'arrête à 100 films valides.
          * --------------------------------------------------------------- */
-        $movies = array_slice($catalog['movies'], 0, 100);
+        $movies = $this->keepWithValidMedia($catalog['movies'], 100, 'film');
 
         foreach ($movies as $i => $m) {
             $category = $genres[$m['genre']] ?? $filmsCategory;
@@ -106,9 +111,12 @@ class MediaSeeder extends Seeder
         }
 
         /* ---------------------------------------------------------------
-         |  SÉRIES — chaque série a ses saisons + épisodes
+         |  SÉRIES — chaque série a ses saisons + épisodes.
+         |  Même filtre media que pour les films : on n'inscrit qu'une série
+         |  dont poster + backdrop TMDB répondent 200. Les épisodes héritent
+         |  tous de la vidéo Bunny, donc la vidéo est toujours servable.
          * --------------------------------------------------------------- */
-        $seriesList = array_slice($catalog['series'], 0, 50);
+        $seriesList = $this->keepWithValidMedia($catalog['series'], 50, 'série');
 
         // Nombre fixe d'épisodes par saison (demande client).
         $episodesPerSeason = 12;
@@ -178,6 +186,99 @@ class MediaSeeder extends Seeder
             Season::count(),
             Episode::count(),
         ));
+    }
+
+    /**
+     * Parcourt le catalogue dans l'ordre et retourne les $limit premières
+     * entrées dont le media est réellement servable :
+     *   - poster ET backdrop TMDB présents et répondant HTTP 200,
+     *   - (la vidéo Bunny est commune à tout le catalogue, donc toujours là).
+     *
+     * Les entrées sans media valide sont ignorées (et loguées), pour ne
+     * jamais seeder un contenu qui s'afficherait cassé côté app mobile.
+     *
+     * @param  array<int,array<string,mixed>> $entries
+     * @return array<int,array<string,mixed>>
+     */
+    private function keepWithValidMedia(array $entries, int $limit, string $label): array
+    {
+        $kept    = [];
+        $skipped = 0;
+
+        foreach ($entries as $entry) {
+            if (count($kept) >= $limit) {
+                break;
+            }
+
+            if ($this->hasValidImages($entry)) {
+                $kept[] = $entry;
+                continue;
+            }
+
+            $skipped++;
+            $this->command?->warn(sprintf(
+                '  ⤫ %s ignoré (media manquant/cassé) : %s',
+                $label,
+                $entry['title'] ?? '?',
+            ));
+        }
+
+        if ($skipped > 0) {
+            $this->command?->info(sprintf(
+                '%d %s(s) écarté(s) faute de media valide.',
+                $skipped,
+                $label,
+            ));
+        }
+
+        return $kept;
+    }
+
+    /**
+     * Vrai si l'entrée a un poster ET un backdrop TMDB qui répondent 200.
+     * On exige les deux : un titre dont l'affiche OU la bannière est cassée
+     * n'a pas un media complet et ne doit pas être seedé.
+     *
+     * Le résultat est mémoïsé par URL pour éviter de re-sonder une même
+     * image (les CSV TMDB partagent parfois des chemins).
+     */
+    private function hasValidImages(array $entry): bool
+    {
+        $poster   = $entry['poster']   ?? null;
+        $backdrop = $entry['backdrop'] ?? null;
+
+        if (empty($poster) || empty($backdrop)) {
+            return false;
+        }
+
+        return $this->tmdbImageExists('https://image.tmdb.org/t/p/w500' . $poster)
+            && $this->tmdbImageExists('https://image.tmdb.org/t/p/w1280' . $backdrop);
+    }
+
+    /** @var array<string,bool> Cache des sondes TMDB par URL. */
+    private array $imageProbeCache = [];
+
+    /**
+     * HEAD best-effort sur une image TMDB. Renvoie true si 200.
+     * En cas d'erreur réseau/timeout on renvoie false (on préfère écarter
+     * un titre douteux plutôt que de seeder un visuel potentiellement cassé).
+     */
+    private function tmdbImageExists(string $url): bool
+    {
+        if (array_key_exists($url, $this->imageProbeCache)) {
+            return $this->imageProbeCache[$url];
+        }
+
+        try {
+            $ok = \Illuminate\Support\Facades\Http::timeout(8)
+                ->withOptions(['allow_redirects' => true])
+                ->head($url)
+                ->successful();
+        } catch (\Throwable $e) {
+            $ok = false;
+        }
+
+        return $this->imageProbeCache[$url] = $ok;
     }
 
     /**

@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             MediaSeeder::class,
             SubscriptionPlanSeeder::class,
             ConfigurationSeeder::class,
+            ScreeningSeeder::class,
         ]);
     }
 }
