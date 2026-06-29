@@ -155,7 +155,7 @@ class MediaController extends Controller
             ]);
         }
 
-        $data = $this->mediaPayload($request, $validated);
+        $data = $this->mediaPayload($request, $validated, $medium);
 
         foreach (['thumbnail', 'cover', 'banner'] as $imgField) {
             if ($request->hasFile($imgField)) {
@@ -193,13 +193,32 @@ class MediaController extends Controller
      * --------------------------------------------------------------- */
 
     /**
+     * Génère un slug unique à partir du titre (suffixe -2, -3… si déjà pris).
+     */
+    protected function uniqueSlug(string $title, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($title) ?: 'media';
+        $slug = $base;
+        $i = 2;
+        while (
+            Media::where('slug', $slug)
+                ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $slug = $base.'-'.$i++;
+        }
+
+        return $slug;
+    }
+
+    /**
      * Construit le payload à enregistrer (transformation des champs Bunny + slug + duration).
      */
-    protected function mediaPayload(Request $request, array $validated): array
+    protected function mediaPayload(Request $request, array $validated, ?Media $ignore = null): array
     {
         $data = $validated;
 
-        $data['slug']        = Str::slug($validated['title']);
+        $data['slug']        = $this->uniqueSlug($validated['title'], $ignore?->id);
         $data['is_featured'] = (bool) $request->boolean('is_featured');
 
         // Conversion durée (minutes → secondes) — pour les films seulement.

@@ -4,129 +4,201 @@
 @section('header', 'Bunny Stream — Upload vidéos')
 
 @section('content')
-<div class="space-y-6" id="bunny-upload-app">
+@php
+    $statusMeta = [
+        'uploading'    => ['Réception',  'bg-blue-500/15 text-blue-300 border-blue-500/30',     'fa-arrow-up-from-bracket'],
+        'queued'       => ['En file',    'bg-amber-500/15 text-amber-300 border-amber-500/30',  'fa-clock'],
+        'transferring' => ['Vers Bunny', 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30','fa-cloud-arrow-up'],
+        'processing'   => ['Encodage',   'bg-purple-500/15 text-purple-300 border-purple-500/30','fa-gears'],
+        'ready'        => ['Prête',      'bg-green-500/15 text-green-300 border-green-500/30',   'fa-circle-check'],
+        'failed'       => ['Échec',      'bg-red-500/15 text-red-300 border-red-500/30',         'fa-circle-exclamation'],
+    ];
+    $human = function ($b) { $u=['o','Ko','Mo','Go','To']; $i=0; $b=(float)$b; while($b>=1024 && $i<count($u)-1){$b/=1024;$i++;} return round($b, $i?1:0).' '.$u[$i]; };
+    $counts = [
+        'total'    => $uploads->count(),
+        'progress' => $uploads->whereIn('status', ['uploading','transferring','processing'])->count(),
+        'queued'   => $uploads->where('status','queued')->count(),
+        'ready'    => $uploads->where('status','ready')->count(),
+        'failed'   => $uploads->where('status','failed')->count(),
+    ];
+@endphp
 
-    {{-- En-tête --}}
+<div class="space-y-6" id="bunny-upload-app"
+     x-data="{ help: false }">
+
+    {{-- En-tête compact --}}
     <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6">
-        <h2 class="text-xl font-bold text-white flex items-center gap-2">
-            <i class="fas fa-cloud-arrow-up text-primary-400"></i>
-            Uploader des vidéos vers la Bunny Library
-        </h2>
-        <p class="text-gray-400 text-sm mt-1">
-            Library #{{ config('services.bunny.library_id') }} — les fichiers sont envoyés au serveur par
-            morceaux, puis transférés vers Bunny en arrière-plan.
-        </p>
-        <p class="text-gray-500 text-xs mt-2">
-            <i class="fas fa-info-circle"></i>
-            La vidéo est <span class="text-white font-semibold">stockée sur le serveur et lisible immédiatement</span>,
-            même si Bunny est indisponible. En arrière-plan, dès que Bunny est joignable, la vidéo y est transférée
-            puis <span class="text-white font-semibold">supprimée du serveur</span> — le transfert se poursuit même si
-            vous fermez l'onglet. Tu peux uploader <span class="text-white font-semibold">plusieurs vidéos à la fois</span>
-            (ex. 5 épisodes). Les vidéos sont attribuables à un film ou un épisode dès l'upload.
-        </p>
-    </div>
-
-    @unless($configured)
-        <div class="bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 rounded-xl p-4 text-sm">
-            <i class="fas fa-triangle-exclamation mr-2"></i>
-            Bunny Stream n'est pas configuré (BUNNY_STREAM_LIBRARY_ID / BUNNY_STREAM_API_KEY /
-            BUNNY_STREAM_CDN_HOSTNAME). Les uploads restent <span class="font-semibold">stockés en local</span> et
-            lisibles ; ils seront transférés vers Bunny une fois configuré (bouton « Relancer »).
-        </div>
-    @endunless
-
-    {{-- Dropzone --}}
-    <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6">
-        <div id="bunny-dropzone"
-             class="border-2 border-dashed border-dark-200 hover:border-primary-500/60 rounded-xl p-10 text-center transition-all cursor-pointer">
-            <i class="fas fa-film text-4xl text-primary-400 mb-3"></i>
-            <p class="text-white font-medium">Glissez-déposez vos vidéos ici</p>
-            <p class="text-gray-500 text-sm mt-1">ou</p>
-            <button type="button" id="bunny-browse"
-                    class="mt-3 bg-primary-500 hover:bg-primary-600 text-white px-5 py-2 rounded-lg font-medium transition-all">
-                <i class="fas fa-folder-open mr-2"></i> Choisir des fichiers
-            </button>
-            <p class="text-gray-600 text-xs mt-4">
-                Formats : mp4, mkv, mov, webm, avi, m4v, ts — aucune limite de taille. Plusieurs fichiers à la fois possibles.<br>
-                En cas de coupure ou de fermeture : re-déposez le <span class="text-gray-400">même fichier</span>, l'upload reprend là où il s'était arrêté.
-            </p>
-        </div>
-    </div>
-
-    {{-- Uploads en cours (alimenté par JS) --}}
-    <div id="bunny-active" class="space-y-3"></div>
-
-    {{-- Uploads récents (rendu serveur) --}}
-    <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 overflow-hidden">
-        <div class="px-6 py-4 border-b border-dark-200 flex items-center justify-between gap-4">
-            <h3 class="text-white font-semibold"><i class="fas fa-clock-rotate-left mr-2 text-gray-400"></i>Uploads récents</h3>
-            <div class="flex items-center gap-3">
-                <span id="bunny-sel-count" class="text-xs text-gray-500"></span>
-                <button type="button" id="bunny-delete-btn" disabled
-                        class="bg-red-500/80 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-all">
-                    <i class="fas fa-trash mr-2"></i>Supprimer la sélection
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-cloud-arrow-up text-primary-400"></i>
+                    Uploader des vidéos
+                </h2>
+                <p class="text-gray-400 text-sm mt-1">
+                    Library #{{ config('services.bunny.library_id') }} —
+                    transfert vers Bunny en arrière-plan, lecture locale immédiate.
+                </p>
+            </div>
+            <div class="flex items-center gap-2">
+                @if($configured)
+                    <span class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-green-500/15 text-green-300 border border-green-500/30">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span> Bunny configuré
+                    </span>
+                @else
+                    <span class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Bunny non configuré
+                    </span>
+                @endif
+                <button type="button" @click="help = !help"
+                        class="text-xs px-3 py-1.5 rounded-full bg-dark-200 hover:bg-dark-300 text-gray-300 transition">
+                    <i class="fas fa-circle-info mr-1"></i> Comment ça marche
                 </button>
             </div>
         </div>
+
+        <div x-show="help" x-collapse x-cloak class="mt-4 text-gray-400 text-sm bg-dark-50 border border-dark-200 rounded-lg p-4 space-y-1.5">
+            <p><i class="fas fa-server w-4 text-primary-400"></i> La vidéo est <span class="text-white">stockée sur le serveur et lisible immédiatement</span>, même si Bunny est indisponible.</p>
+            <p><i class="fas fa-cloud-arrow-up w-4 text-primary-400"></i> En arrière-plan, dès que Bunny répond, elle y est transférée puis <span class="text-white">supprimée du serveur</span> — le transfert continue même onglet fermé.</p>
+            <p><i class="fas fa-layer-group w-4 text-primary-400"></i> Plusieurs fichiers à la fois (ex. 5 épisodes). Coupure ou fermeture : re-déposez le <span class="text-white">même fichier</span>, ça reprend où ça s'était arrêté.</p>
+        </div>
+
+        @unless($configured)
+            <div class="mt-4 bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-lg p-3 text-sm">
+                <i class="fas fa-triangle-exclamation mr-1"></i>
+                Bunny n'est pas configuré. Les uploads restent stockés en local et lisibles ; ils partiront vers Bunny une fois configuré (bouton « Relancer »).
+            </div>
+        @endunless
+    </div>
+
+    {{-- Dropzone --}}
+    <div id="bunny-dropzone"
+         class="bg-dark-100 hover:bg-dark-100/70 rounded-xl shadow-lg border-2 border-dashed border-dark-200 hover:border-primary-500/60 p-10 text-center transition-all cursor-pointer">
+        <i class="fas fa-film text-4xl text-primary-400 mb-3"></i>
+        <p class="text-white font-medium">Glissez-déposez vos vidéos ici</p>
+        <p class="text-gray-500 text-sm mt-1">ou</p>
+        <button type="button" id="bunny-browse"
+                class="inline-block mt-3 bg-primary-500 hover:bg-primary-600 text-white px-5 py-2 rounded-lg font-medium transition-all">
+            <i class="fas fa-folder-open mr-2"></i> Choisir des fichiers
+        </button>
+        <p class="text-gray-600 text-xs mt-4">mp4, mkv, mov, webm, avi, m4v, ts — aucune limite de taille · plusieurs fichiers possibles</p>
+    </div>
+
+    {{-- Uploads en cours (seulement ceux qui bougent réellement) --}}
+    <div id="bunny-active" class="space-y-2"></div>
+
+    {{-- Bibliothèque des uploads --}}
+    <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-dark-200 flex flex-col lg:flex-row lg:items-center gap-3 lg:justify-between">
+            <div class="flex items-center gap-3">
+                <h3 class="text-white font-semibold whitespace-nowrap"><i class="fas fa-photo-film mr-2 text-gray-400"></i>Mes vidéos</h3>
+                <span class="text-xs text-gray-500">{{ $counts['total'] }} au total</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="relative">
+                    <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+                    <input type="text" id="bunny-search" placeholder="Rechercher par nom…"
+                           class="bg-dark-50 border border-dark-200 rounded-lg pl-8 pr-3 py-2 text-sm text-white w-52 focus:outline-none focus:border-primary-500">
+                </div>
+                <select id="bunny-filter" class="bg-dark-50 border border-dark-200 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500">
+                    <option value="">Tous les statuts</option>
+                    <option value="progress">En cours</option>
+                    <option value="queued">En file</option>
+                    <option value="ready">Prête</option>
+                    <option value="failed">Échec</option>
+                </select>
+                <span id="bunny-sel-count" class="text-xs text-gray-400"></span>
+                <button type="button" id="bunny-delete-btn" disabled
+                        class="bg-red-500/80 hover:bg-red-600 disabled:opacity-30 disabled:cursor-not-allowed text-white px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap">
+                    <i class="fas fa-trash mr-1.5"></i>Supprimer
+                </button>
+            </div>
+        </div>
+
         <div class="overflow-x-auto">
-            <table class="w-full text-sm" id="bunny-recent-table">
-                @php
-                    $statusMeta = [
-                        'uploading'    => ['Réception…',  'bg-blue-500/20 text-blue-300'],
-                        'queued'       => ['En file',     'bg-yellow-500/20 text-yellow-300'],
-                        'transferring' => ['Vers Bunny…', 'bg-indigo-500/20 text-indigo-300'],
-                        'processing'   => ['Encodage…',   'bg-purple-500/20 text-purple-300'],
-                        'ready'        => ['Prête',       'bg-green-500/20 text-green-300'],
-                        'failed'       => ['Échec',       'bg-red-500/20 text-red-300'],
-                    ];
-                    $human = function ($b) { $u=['o','Ko','Mo','Go','To']; $i=0; $b=(float)$b; while($b>=1024 && $i<count($u)-1){$b/=1024;$i++;} return round($b, $i?1:0).' '.$u[$i]; };
-                @endphp
-                <thead class="bg-dark-200/50 text-gray-400 text-xs uppercase">
+            <table class="w-full text-sm" id="bunny-table">
+                <thead class="bg-dark-200/40 text-gray-400 text-xs uppercase tracking-wide">
                     <tr>
-                        <th class="px-4 py-3"><input type="checkbox" id="bunny-check-all" class="w-4 h-4 accent-red-500"></th>
-                        <th class="text-left px-6 py-3">Titre</th>
-                        <th class="text-left px-6 py-3">Statut</th>
-                        <th class="text-left px-6 py-3">Progression</th>
-                        <th class="text-left px-6 py-3">Taille</th>
-                        <th class="text-left px-6 py-3">Date</th>
-                        <th class="text-left px-6 py-3">Actions</th>
+                        <th class="px-4 py-3 w-10"><input type="checkbox" id="bunny-check-all" class="w-4 h-4 accent-red-500 align-middle"></th>
+                        <th class="text-left px-3 py-3">Vidéo</th>
+                        <th class="text-left px-3 py-3 w-40">Statut</th>
+                        <th class="text-left px-3 py-3 w-24">Taille</th>
+                        <th class="text-left px-3 py-3 w-28">Ajoutée</th>
+                        <th class="text-right px-4 py-3 w-44">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-dark-200">
+                <tbody class="divide-y divide-dark-200/70">
                     @forelse($uploads as $u)
-                        @php $meta = $statusMeta[$u->status] ?? ['—', 'bg-gray-500/20 text-gray-300']; $hasFile = $u->temp_path && is_file($u->temp_path); $localReady = $u->hasLocalCopy(); @endphp
-                        <tr data-upload-id="{{ $u->id }}">
-                            <td class="px-4 py-3"><input type="checkbox" class="bunny-row-check w-4 h-4 accent-red-500" value="{{ $u->id }}"></td>
-                            <td class="px-6 py-3 text-white">{{ $u->title }}</td>
-                            <td class="px-6 py-3" data-cell="status">
-                                <span class="px-2 py-1 rounded text-xs font-medium {{ $meta[1] }}">{{ $meta[0] }}</span>
-                            </td>
-                            <td class="px-6 py-3 w-64" data-cell="progress">
-                                <div class="w-full bg-dark-300 rounded-full h-2 overflow-hidden">
-                                    <div class="{{ $u->status === 'failed' ? 'bg-red-500' : ($u->status === 'ready' ? 'bg-green-500' : 'bg-primary-500') }} h-2 rounded-full" style="width:{{ $u->progress }}%"></div>
+                        @php
+                            $meta       = $statusMeta[$u->status] ?? ['—', 'bg-gray-500/15 text-gray-300 border-gray-500/30', 'fa-circle'];
+                            $hasFile    = $u->temp_path && is_file($u->temp_path);
+                            $localReady = $u->hasLocalCopy();
+                            $inProgress = in_array($u->status, ['uploading','transferring','processing'], true);
+                        @endphp
+                        <tr data-upload-id="{{ $u->id }}" data-status="{{ $u->status }}" data-title="{{ \Illuminate\Support\Str::lower($u->title) }}"
+                            class="hover:bg-dark-200/30 transition-colors">
+                            <td class="px-4 py-3"><input type="checkbox" class="bunny-row-check w-4 h-4 accent-red-500 align-middle" value="{{ $u->id }}"></td>
+
+                            <td class="px-3 py-3">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <div class="w-12 h-9 rounded bg-dark-300 flex items-center justify-center flex-shrink-0 text-gray-500">
+                                        <i class="fas fa-film"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-white truncate max-w-xs" title="{{ $u->title }}">{{ $u->title }}</p>
+                                        <div class="flex items-center gap-2 mt-0.5">
+                                            @if($localReady)
+                                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-300 border border-green-500/25">LOCAL · dispo picker</span>
+                                            @endif
+                                        </div>
+                                    </div>
                                 </div>
-                                <span class="text-xs text-gray-500">{{ $u->progress }}%</span>
                             </td>
-                            <td class="px-6 py-3 text-gray-400" data-cell="size">{{ $human($u->size_bytes) }}</td>
-                            <td class="px-6 py-3 text-gray-500">{{ $u->created_at?->diffForHumans() }}</td>
-                            <td class="px-6 py-3 text-xs whitespace-nowrap">
-                                @if($hasFile)
-                                    <a href="{{ route('admin.bunny.uploads.download', $u->id) }}" class="text-primary-300 hover:underline mr-3"><i class="fas fa-download mr-1"></i>Original</a>
+
+                            <td class="px-3 py-3" data-cell="status">
+                                <span class="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border {{ $meta[1] }}">
+                                    <i class="fas {{ $meta[2] }} text-[10px]"></i>{{ $meta[0] }}
+                                </span>
+                                <div data-cell="progress" class="mt-1.5 {{ $inProgress ? '' : 'hidden' }}">
+                                    <div class="w-28 bg-dark-300 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-primary-500 h-1.5 rounded-full transition-all" style="width:{{ $u->progress }}%"></div>
+                                    </div>
+                                </div>
+                                @if($u->status === 'failed' && $u->error)
+                                    <p class="text-[11px] text-red-400/80 mt-1 max-w-xs truncate" title="{{ $u->error }}">{{ $u->error }}</p>
                                 @endif
-                                @if($hasFile && $u->status === 'failed')
-                                    <button type="button" data-retry-row="{{ $u->id }}" class="text-yellow-300 hover:underline mr-3"><i class="fas fa-rotate-right mr-1"></i>Relancer</button>
-                                @endif
-                                @if($localReady)
-                                    <a href="{{ asset('storage/' . $u->local_path) }}" target="_blank" class="text-green-300 hover:underline mr-3"><i class="fas fa-play mr-1"></i>Lire local</a>
-                                    <span class="text-green-400"><i class="fas fa-circle-check mr-1"></i>Dispo picker (local)</span>
-                                @endif
+                            </td>
+
+                            <td class="px-3 py-3 text-gray-400" data-cell="size">{{ $human($u->size_bytes) }}</td>
+                            <td class="px-3 py-3 text-gray-500 whitespace-nowrap">{{ $u->created_at?->diffForHumans(null, true) }}</td>
+
+                            <td class="px-4 py-3" data-cell="actions">
+                                <div class="flex items-center justify-end gap-1.5">
+                                    @if($localReady)
+                                        <a href="{{ asset('storage/' . $u->local_path) }}" target="_blank" title="Lire en local"
+                                           class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-dark-300 text-green-300"><i class="fas fa-play text-xs"></i></a>
+                                    @endif
+                                    @if($hasFile)
+                                        <a href="{{ route('admin.bunny.uploads.download', $u->id) }}" title="Télécharger l'original"
+                                           class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-dark-300 text-gray-300"><i class="fas fa-download text-xs"></i></a>
+                                    @endif
+                                    @if($hasFile && $u->status === 'failed')
+                                        <button type="button" data-retry-row="{{ $u->id }}" title="Relancer vers Bunny"
+                                                class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-dark-300 text-amber-300"><i class="fas fa-rotate-right text-xs"></i></button>
+                                    @endif
+                                    <button type="button" data-del-row="{{ $u->id }}" title="Supprimer"
+                                            class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-red-500/30 text-red-300"><i class="fas fa-trash text-xs"></i></button>
+                                </div>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="px-6 py-6 text-center text-gray-500">Aucun upload pour l'instant.</td></tr>
+                        <tr id="bunny-empty"><td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                            <i class="fas fa-inbox text-3xl mb-2 block opacity-50"></i>
+                            Aucune vidéo pour l'instant. Glissez vos premiers fichiers ci-dessus.
+                        </td></tr>
                     @endforelse
                 </tbody>
             </table>
+            <div id="bunny-no-results" class="hidden px-6 py-8 text-center text-gray-500 text-sm">Aucun résultat pour ce filtre.</div>
         </div>
     </div>
 </div>
@@ -136,280 +208,199 @@
 <script src="https://cdn.jsdelivr.net/npm/resumablejs@1.1.0/resumable.min.js"></script>
 <script>
 (function () {
-    const CSRF      = '{{ csrf_token() }}';
-    const URL_START = '{{ route('admin.bunny.upload.start') }}';
-    const URL_CHUNK = '{{ route('admin.bunny.upload.chunk') }}';
-    const URL_STATUS = (id) => `{{ url('admin/bunny/uploads') }}/${id}/status`;
+    const CSRF       = '{{ csrf_token() }}';
+    const URL_START  = '{{ route('admin.bunny.upload.start') }}';
+    const URL_CHUNK  = '{{ route('admin.bunny.upload.chunk') }}';
     const URL_ACTIVE = '{{ route('admin.bunny.uploads.active') }}';
-    const CONFIGURED = @json($configured);
+    const URL_BASE   = '{{ url('admin/bunny/uploads') }}';
+    const URL_BULK   = '{{ route('admin.bunny.uploads.bulk-delete') }}';
 
     const activeEl = document.getElementById('bunny-active');
-    const pollers  = {}; // upload_id -> intervalId
+    const tableBody = document.querySelector('#bunny-table tbody');
+    let pollTimer = null;
 
-    /* ---------- Helpers ---------- */
-    function humanSize(bytes) {
-        bytes = Number(bytes) || 0;
-        const u = ['o', 'Ko', 'Mo', 'Go', 'To'];
-        let i = 0;
-        while (bytes >= 1024 && i < u.length - 1) { bytes /= 1024; i++; }
-        return bytes.toFixed(i ? 1 : 0) + ' ' + u[i];
-    }
-
-    const STATUS_LABELS = {
-        uploading:    { txt: 'Réception…',  cls: 'bg-blue-500/20 text-blue-300' },
-        queued:       { txt: 'En file',     cls: 'bg-yellow-500/20 text-yellow-300' },
-        transferring: { txt: 'Vers Bunny…', cls: 'bg-indigo-500/20 text-indigo-300' },
-        processing:   { txt: 'Encodage…',   cls: 'bg-purple-500/20 text-purple-300' },
-        ready:        { txt: 'Prête',       cls: 'bg-green-500/20 text-green-300' },
-        failed:       { txt: 'Échec',       cls: 'bg-red-500/20 text-red-300' },
+    const META = {
+        uploading:    ['Réception','bg-blue-500/15 text-blue-300 border-blue-500/30','fa-arrow-up-from-bracket'],
+        queued:       ['En file','bg-amber-500/15 text-amber-300 border-amber-500/30','fa-clock'],
+        transferring: ['Vers Bunny','bg-indigo-500/15 text-indigo-300 border-indigo-500/30','fa-cloud-arrow-up'],
+        processing:   ['Encodage','bg-purple-500/15 text-purple-300 border-purple-500/30','fa-gears'],
+        ready:        ['Prête','bg-green-500/15 text-green-300 border-green-500/30','fa-circle-check'],
+        failed:       ['Échec','bg-red-500/15 text-red-300 border-red-500/30','fa-circle-exclamation'],
     };
+    const IN_PROGRESS = ['uploading','transferring','processing'];
+    const TERMINAL = ['ready','failed'];
 
-    function statusBadge(status) {
-        const s = STATUS_LABELS[status] || { txt: status, cls: 'bg-gray-500/20 text-gray-300' };
-        return `<span class="px-2 py-1 rounded text-xs font-medium ${s.cls}">${s.txt}</span>`;
-    }
+    function human(b){ b=Number(b)||0; const u=['o','Ko','Mo','Go','To']; let i=0; while(b>=1024&&i<u.length-1){b/=1024;i++;} return b.toFixed(i?1:0)+' '+u[i]; }
+    function pill(s){ const m=META[s]||['—','bg-gray-500/15 text-gray-300 border-gray-500/30','fa-circle']; return `<span class="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border ${m[1]}"><i class="fas ${m[2]} text-[10px]"></i>${m[0]}</span>`; }
 
-    function progressBar(progress, status) {
-        const color = status === 'failed' ? 'bg-red-500'
-                    : status === 'ready'  ? 'bg-green-500'
-                    : 'bg-primary-500';
-        return `<div class="w-full bg-dark-300 rounded-full h-2 overflow-hidden">
-                    <div class="${color} h-2 rounded-full transition-all" style="width:${progress || 0}%"></div>
-                </div>
-                <span class="text-xs text-gray-500">${progress || 0}%</span>`;
-    }
-
-    /* ---------- Carte d'upload actif ---------- */
-    function cardFor(id) {
-        let el = document.getElementById('upload-card-' + id);
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'upload-card-' + id;
-            el.className = 'bg-dark-100 rounded-xl border border-dark-200 p-4';
+    /* ---------- Zone « en cours » (compacte) ---------- */
+    function progressRow(d){
+        let el = document.getElementById('act-'+d.id);
+        if (TERMINAL.includes(d.status) || d.status==='queued'){ if(el) el.remove(); return; }
+        if(!el){
+            el=document.createElement('div'); el.id='act-'+d.id;
+            el.className='bg-dark-100 rounded-xl border border-dark-200 px-4 py-3';
             activeEl.appendChild(el);
         }
-        return el;
-    }
-
-    function renderCard(d) {
-        const el = cardFor(d.id);
-        const hint = d.status === 'uploading' ? 'Envoi vers le serveur'
-                   : d.status === 'transferring' ? 'Transfert vers Bunny'
-                   : d.status === 'processing' ? 'Bunny encode la vidéo'
-                   : d.status === 'queued' ? 'En attente de transfert'
-                   : '';
-        const actions = [];
-        if (d.download_url) {
-            actions.push(`<a href="${d.download_url}" class="text-primary-300 hover:underline">
-                <i class="fas fa-download mr-1"></i>Télécharger l'original</a>`);
-        }
-        if (d.can_retry) {
-            actions.push(`<button type="button" data-retry="${d.id}" class="text-yellow-300 hover:underline">
-                <i class="fas fa-rotate-right mr-1"></i>Relancer vers Bunny</button>`);
-        }
-        if (d.local_ready) {
-            actions.push(`<a href="${d.local_url}" target="_blank" class="text-green-300 hover:underline">
-                <i class="fas fa-play mr-1"></i>Lire en local</a>`);
-            actions.push(`<span class="text-green-400"><i class="fas fa-circle-check mr-1"></i>Dispo dans le picker (local)</span>`);
-        }
-        el.innerHTML = `
-            <div class="flex items-center justify-between mb-2">
-                <div class="text-white font-medium truncate pr-4">${d.title || d.filename || ('#' + d.id)}</div>
-                ${statusBadge(d.status)}
+        const label = d.status==='uploading'?'Envoi vers le serveur':(d.status==='transferring'?'Transfert vers Bunny':'Encodage Bunny');
+        el.innerHTML=`
+            <div class="flex items-center justify-between mb-1.5 gap-3">
+                <span class="text-white text-sm truncate">${d.title||d.filename||('#'+d.id)}</span>
+                ${pill(d.status)}
             </div>
-            <div class="flex items-center gap-3">${progressBar(d.progress, d.status)}</div>
-            <div class="text-xs text-gray-500 mt-1">${hint}${d.size_bytes ? ' · ' + humanSize(d.size_bytes) : ''}
-                ${d.error ? '<span class="text-red-400"> · ' + d.error + '</span>' : ''}</div>
-            ${actions.length ? '<div class="flex gap-4 mt-2 text-xs">' + actions.join('') + '</div>' : ''}`;
-        const retryBtn = el.querySelector('[data-retry]');
-        if (retryBtn) retryBtn.addEventListener('click', () => retryUpload(d.id));
-        // On masque seulement les réussites ; les échecs restent (boutons récupérer/relancer).
-        if (d.status === 'ready') {
-            setTimeout(() => { el.remove(); }, 4000);
+            <div class="w-full bg-dark-300 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-primary-500 h-1.5 rounded-full transition-all" style="width:${d.progress||0}%"></div>
+            </div>
+            <div class="text-[11px] text-gray-500 mt-1">${label} · ${d.progress||0}%${d.size_bytes?' · '+human(d.size_bytes):''}</div>`;
+    }
+
+    /* ---------- Mise à jour d'une ligne du tableau ---------- */
+    function upsertRow(d){
+        let row = tableBody.querySelector(`tr[data-upload-id="${d.id}"]`);
+        if(!row){ // nouvel upload (cette session) → on recharge pour le rendu serveur complet
+            if(d.status==='queued' || TERMINAL.includes(d.status)){ scheduleReload(); }
+            return;
+        }
+        row.dataset.status = d.status;
+        const stCell = row.querySelector('[data-cell="status"]');
+        if(stCell){
+            const prog = stCell.querySelector('[data-cell="progress"]');
+            stCell.querySelector('span').outerHTML = pill(d.status);
+            // réinsérer la barre si encore présente
+            const bar = row.querySelector('[data-cell="progress"]') || prog;
+            if(bar){
+                if(IN_PROGRESS.includes(d.status)){ bar.classList.remove('hidden'); const f=bar.querySelector('div>div'); if(f) f.style.width=(d.progress||0)+'%'; }
+                else bar.classList.add('hidden');
+            }
         }
     }
 
-    async function retryUpload(id) {
-        try {
-            const r = await fetch(`{{ url('admin/bunny/uploads') }}/${id}/retry`, {
-                method: 'POST',
-                headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-            });
-            const d = await r.json();
-            if (!r.ok) { alert(d.error || 'Relance impossible.'); return; }
-            renderCard(d);
-            updateRecentRow(d);
-            startPolling(id);
-        } catch (e) { alert('Erreur réseau à la relance.'); }
-    }
+    let reloadT=null;
+    function scheduleReload(){ if(reloadT) return; reloadT=setTimeout(()=>window.location.reload(), 1500); }
 
-    /* ---------- Suivi serveur (polling) ---------- */
-    function startPolling(id) {
-        if (pollers[id]) return;
-        pollers[id] = setInterval(() => pollOnce(id), 2500);
-        pollOnce(id);
+    /* ---------- Polling unique via /uploads/active ---------- */
+    async function sync(){
+        try{
+            const r=await fetch(URL_ACTIVE,{headers:{'Accept':'application/json'}});
+            if(!r.ok) return;
+            const {data}=await r.json();
+            const seen=new Set();
+            (data||[]).forEach(d=>{ seen.add(String(d.id)); progressRow(d); upsertRow(d); });
+            // retirer les cartes « en cours » devenues inactives
+            Array.from(activeEl.children).forEach(c=>{ const id=c.id.replace('act-',''); if(!seen.has(id)) c.remove(); });
+            const stillActive=(data||[]).some(d=>!TERMINAL.includes(d.status));
+            if(stillActive){ pollTimer=setTimeout(sync, 3000); } else { pollTimer=null; }
+        }catch(e){ pollTimer=setTimeout(sync, 5000); }
     }
-    function stopPolling(id) {
-        if (pollers[id]) { clearInterval(pollers[id]); delete pollers[id]; }
-    }
-    async function pollOnce(id) {
-        try {
-            const r = await fetch(URL_STATUS(id), { headers: { 'Accept': 'application/json' } });
-            if (!r.ok) return;
-            const d = await r.json();
-            renderCard(d);
-            updateRecentRow(d);
-            if (d.status === 'ready' || d.status === 'failed') stopPolling(id);
-        } catch (e) { /* on réessaie au tick suivant */ }
-    }
-
-    function updateRecentRow(d) {
-        const row = document.querySelector(`#bunny-recent-table tr[data-upload-id="${d.id}"]`);
-        if (!row) return;
-        row.querySelector('[data-cell="status"]').innerHTML = statusBadge(d.status);
-        row.querySelector('[data-cell="progress"]').innerHTML = progressBar(d.progress, d.status);
-        row.querySelector('[data-cell="size"]').textContent = humanSize(d.size_bytes);
-    }
+    function ensurePolling(){ if(!pollTimer) sync(); }
 
     /* ---------- Resumable.js ---------- */
-    // L'upload fonctionne même si Bunny est indisponible : la vidéo est stockée
-    // sur le serveur (lisible en local) et poussée vers Bunny en arrière-plan.
     if (window.Resumable) {
         const r = new Resumable({
-            target: URL_CHUNK,
-            chunkSize: 5 * 1024 * 1024,      // 5 Mo
-            simultaneousUploads: 3,          // chunks en parallèle (débit gros fichiers + multi-upload)
-            testChunks: true,                // teste les morceaux déjà reçus → reprise après coupure/fermeture
-            fileParameterName: 'file',
-            maxChunkRetries: 5,
-            chunkRetryInterval: 2000,
-            maxFiles: undefined,             // multi-upload illimité (ex. 5 épisodes d'un coup)
+            target: URL_CHUNK, chunkSize: 5*1024*1024, simultaneousUploads: 3,
+            testChunks: true, fileParameterName: 'file', maxChunkRetries: 5, chunkRetryInterval: 2000,
             headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
             query: (file) => ({ upload_id: file.uploadId }),
         });
-
-        // assignBrowse(node, isDirectory=false, singleFile=false) → sélection multiple permise.
         r.assignDrop(document.getElementById('bunny-dropzone'));
         r.assignBrowse(document.getElementById('bunny-browse'), false, false);
 
-        // On crée la ligne de suivi avant d'uploader, pour récupérer l'upload_id.
         r.on('fileAdded', async (file) => {
-            try {
-                const res = await fetch(URL_START, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': CSRF,
-                        'Accept': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        filename: file.fileName || file.file.name,
-                        size: file.size,
-                        identifier: file.uniqueIdentifier,
-                    }),
-                });
-                const data = await res.json();
-                if (!res.ok) { alert(data.error || 'Démarrage de l\'upload impossible.'); r.removeFile(file); return; }
-                file.uploadId = data.upload_id;
-                renderCard({ id: data.upload_id, title: file.fileName, status: 'uploading', progress: 0, size_bytes: file.size });
+            try{
+                const res=await fetch(URL_START,{method:'POST',
+                    headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'},
+                    body:JSON.stringify({filename:file.fileName||file.file.name, size:file.size, identifier:file.uniqueIdentifier})});
+                const data=await res.json();
+                if(!res.ok){ alert(data.error||'Démarrage impossible.'); r.removeFile(file); return; }
+                file.uploadId=data.upload_id;
+                progressRow({id:data.upload_id,title:file.fileName,status:'uploading',progress:0,size_bytes:file.size});
                 r.upload();
-            } catch (e) {
-                alert('Erreur réseau au démarrage de l\'upload.');
-                r.removeFile(file);
-            }
+            }catch(e){ alert('Erreur réseau au démarrage.'); r.removeFile(file); }
         });
-
-        r.on('fileProgress', (file) => {
-            if (!file.uploadId) return;
-            renderCard({
-                id: file.uploadId, title: file.fileName, status: 'uploading',
-                progress: Math.floor(file.progress() * 100), size_bytes: file.size,
-            });
-        });
-
-        // Dernier chunk reçu : le serveur a dispatché le Job. On passe au suivi serveur.
-        r.on('fileSuccess', (file) => {
-            if (file.uploadId) startPolling(file.uploadId);
-        });
-
-        r.on('fileError', (file, message) => {
-            if (file.uploadId) {
-                renderCard({ id: file.uploadId, title: file.fileName, status: 'failed', progress: 0,
-                             error: 'Échec de la réception côté serveur.' });
-            }
-        });
+        r.on('fileProgress', (file)=>{ if(file.uploadId) progressRow({id:file.uploadId,title:file.fileName,status:'uploading',progress:Math.floor(file.progress()*100),size_bytes:file.size}); });
+        r.on('fileSuccess', (file)=>{ const el=document.getElementById('act-'+file.uploadId); if(el) el.remove(); scheduleReload(); });
+        r.on('fileError', (file)=>{ if(file.uploadId){ const el=document.getElementById('act-'+file.uploadId); if(el) el.querySelector('div:last-child').textContent='Échec de la réception.'; } });
     }
 
-    /* ---------- Au chargement : reprendre le suivi des uploads serveur en cours ---------- */
-    async function loadActive() {
-        try {
-            const r = await fetch(URL_ACTIVE, { headers: { 'Accept': 'application/json' } });
-            if (!r.ok) return;
-            const { data } = await r.json();
-            (data || []).forEach((d) => {
-                // Échecs récupérables OU phase serveur (queued/transferring/processing) qui avancent seuls.
-                if (d.status !== 'uploading') { renderCard(d); }
-                if (d.status !== 'uploading' && d.status !== 'failed') { startPolling(d.id); }
-                updateRecentRow(d);
-            });
-        } catch (e) { /* ignore */ }
+    /* ---------- Relancer ---------- */
+    async function retryUpload(id){
+        try{
+            const r=await fetch(`${URL_BASE}/${id}/retry`,{method:'POST',headers:{'X-CSRF-TOKEN':CSRF,'Accept':'application/json'}});
+            const d=await r.json();
+            if(!r.ok){ alert(d.error||'Relance impossible.'); return; }
+            ensurePolling(); scheduleReload();
+        }catch(e){ alert('Erreur réseau à la relance.'); }
     }
-    // Boutons rendus côté serveur dans le tableau.
-    document.querySelectorAll('[data-retry-row]').forEach((btn) => {
-        btn.addEventListener('click', () => retryUpload(btn.getAttribute('data-retry-row')));
-    });
+    document.addEventListener('click',(e)=>{ const b=e.target.closest('[data-retry-row]'); if(b) retryUpload(b.dataset.retryRow); });
 
-    /* ---------- Sélection multiple + suppression ---------- */
-    const checkAll  = document.getElementById('bunny-check-all');
-    const delBtn    = document.getElementById('bunny-delete-btn');
-    const selCount  = document.getElementById('bunny-sel-count');
-    const rowChecks = () => Array.from(document.querySelectorAll('.bunny-row-check'));
-    const selectedIds = () => rowChecks().filter(c => c.checked).map(c => c.value);
-
-    function refreshSelection() {
-        const n = selectedIds().length;
-        if (delBtn) delBtn.disabled = n === 0;
-        if (selCount) selCount.textContent = n ? `${n} sélectionnée(s)` : '';
-        if (checkAll) {
-            const all = rowChecks();
-            checkAll.checked = all.length > 0 && all.every(c => c.checked);
-            checkAll.indeterminate = all.some(c => c.checked) && !checkAll.checked;
+    /* ---------- Suppression (ligne + sélection) ---------- */
+    async function deleteIds(ids){
+        const r=await fetch(URL_BULK,{method:'POST',
+            headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'},
+            body:JSON.stringify({ids})});
+        return r.ok ? r.json() : Promise.reject(await r.json().catch(()=>({})));
+    }
+    function afterDelete(d){
+        if(d.skipped && d.skipped.length){
+            alert(`${d.deleted} supprimée(s).\nIgnorée(s) (rattachée à un film/épisode) :\n`+d.skipped.map(s=>'• '+s.title).join('\n'));
         }
+        window.location.reload();
     }
-    if (checkAll) checkAll.addEventListener('change', () => {
-        rowChecks().forEach(c => { c.checked = checkAll.checked; });
-        refreshSelection();
+    document.addEventListener('click', async (e)=>{
+        const b=e.target.closest('[data-del-row]'); if(!b) return;
+        if(!confirm('Supprimer cette vidéo ? Le fichier local sera effacé.')) return;
+        try{ afterDelete(await deleteIds([Number(b.dataset.delRow)])); }
+        catch(d){ alert(d.message||'Suppression impossible.'); }
     });
-    rowChecks().forEach(c => c.addEventListener('change', refreshSelection));
 
-    if (delBtn) delBtn.addEventListener('click', async () => {
-        const ids = selectedIds();
-        if (!ids.length) return;
-        if (!confirm(`Supprimer définitivement ${ids.length} vidéo(s) ? Les fichiers locaux seront effacés. Les vidéos rattachées à un film/épisode seront ignorées.`)) return;
-        delBtn.disabled = true;
-        delBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Suppression…';
-        try {
-            const r = await fetch('{{ route('admin.bunny.uploads.bulk-delete') }}', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                body: JSON.stringify({ ids }),
-            });
-            const d = await r.json();
-            if (!r.ok) { alert(d.message || 'Suppression impossible.'); return; }
-            if (d.skipped && d.skipped.length) {
-                alert(`${d.deleted} supprimée(s).\nIgnorées (rattachées à un film/épisode) : ` +
-                      d.skipped.map(s => `• ${s.title}`).join('\n'));
+    const checkAll=document.getElementById('bunny-check-all');
+    const delBtn=document.getElementById('bunny-delete-btn');
+    const selCount=document.getElementById('bunny-sel-count');
+    const rowChecks=()=>Array.from(document.querySelectorAll('.bunny-row-check'));
+    const selectedIds=()=>rowChecks().filter(c=>c.checked && c.closest('tr').style.display!=='none').map(c=>Number(c.value));
+    function refreshSel(){
+        const n=selectedIds().length;
+        if(delBtn) delBtn.disabled=n===0;
+        if(selCount) selCount.textContent=n?`${n} sélectionnée(s)`:'';
+        if(checkAll){ const vis=rowChecks().filter(c=>c.closest('tr').style.display!=='none'); checkAll.checked=vis.length>0&&vis.every(c=>c.checked); checkAll.indeterminate=vis.some(c=>c.checked)&&!checkAll.checked; }
+    }
+    if(checkAll) checkAll.addEventListener('change',()=>{ rowChecks().forEach(c=>{ if(c.closest('tr').style.display!=='none') c.checked=checkAll.checked; }); refreshSel(); });
+    document.addEventListener('change',(e)=>{ if(e.target.classList.contains('bunny-row-check')) refreshSel(); });
+    if(delBtn) delBtn.addEventListener('click', async ()=>{
+        const ids=selectedIds(); if(!ids.length) return;
+        if(!confirm(`Supprimer ${ids.length} vidéo(s) ? Les fichiers locaux seront effacés. Les vidéos rattachées à un film/épisode seront ignorées.`)) return;
+        delBtn.disabled=true; delBtn.innerHTML='<i class="fas fa-spinner fa-spin mr-1.5"></i>Suppression…';
+        try{ afterDelete(await deleteIds(ids)); }
+        catch(d){ alert(d.message||'Suppression impossible.'); delBtn.disabled=false; delBtn.innerHTML='<i class="fas fa-trash mr-1.5"></i>Supprimer'; }
+    });
+
+    /* ---------- Recherche + filtre ---------- */
+    const search=document.getElementById('bunny-search');
+    const filter=document.getElementById('bunny-filter');
+    const noRes=document.getElementById('bunny-no-results');
+    function applyFilter(){
+        const q=(search?.value||'').toLowerCase().trim();
+        const f=filter?.value||'';
+        let visible=0;
+        tableBody.querySelectorAll('tr[data-upload-id]').forEach(row=>{
+            const t=row.dataset.title||''; const s=row.dataset.status||'';
+            let ok = (!q || t.includes(q));
+            if(ok && f){
+                if(f==='progress') ok=IN_PROGRESS.includes(s);
+                else ok = s===f;
             }
-            window.location.reload();
-        } catch (e) {
-            alert('Erreur réseau lors de la suppression.');
-            delBtn.disabled = false;
-            delBtn.innerHTML = '<i class="fas fa-trash mr-2"></i>Supprimer la sélection';
-        }
-    });
-    refreshSelection();
+            row.style.display = ok ? '' : 'none';
+            if(ok) visible++;
+        });
+        if(noRes) noRes.classList.toggle('hidden', visible>0);
+        refreshSel();
+    }
+    if(search) search.addEventListener('input', applyFilter);
+    if(filter) filter.addEventListener('change', applyFilter);
 
-    loadActive();
+    refreshSel();
+    ensurePolling();
 })();
 </script>
 @endpush
+@endsection
