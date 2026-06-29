@@ -17,13 +17,14 @@ return [
 
     'clear' => [
         /*
-         * Purge automatique des chunks orphelins de plus de 6h (un upload de
-         * plusieurs Go peut légitimement durer longtemps).
+         * On gère nous-mêmes les morceaux (réception maison résumable) et leur
+         * purge via la commande bunny:uploads:cleanup. On désactive donc le
+         * nettoyage planifié du package pour qu'il ne touche pas nos morceaux
+         * pendant un upload lent de plusieurs Go.
          */
-        'timestamp' => '-6 HOURS',
+        'timestamp' => '-24 HOURS',
         'schedule'  => [
-            'enabled' => true,
-            'cron'    => '25 * * * *', // toutes les heures à la 25e minute
+            'enabled' => false,
         ],
     ],
 

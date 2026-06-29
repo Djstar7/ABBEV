@@ -57,6 +57,23 @@ class CleanupBunnyUploads extends Command
         }
         $this->info("{$removed} fichier(s) vidéo orphelin(s) supprimé(s).");
 
+        // 3. Dossiers de morceaux orphelins (storage/app/chunks/{id}) : uploads
+        //    disparus ou déjà assemblés/terminés.
+        $chunksRoot = storage_path('app/chunks');
+        $removedDirs = 0;
+
+        if (File::isDirectory($chunksRoot)) {
+            $activeIds = BunnyUpload::where('status', 'uploading')->pluck('id')->map(fn ($id) => (string) $id)->all();
+
+            foreach (File::directories($chunksRoot) as $dirPath) {
+                if (! in_array(basename($dirPath), $activeIds, true)) {
+                    File::deleteDirectory($dirPath);
+                    $removedDirs++;
+                }
+            }
+        }
+        $this->info("{$removedDirs} dossier(s) de morceaux orphelin(s) supprimé(s).");
+
         return self::SUCCESS;
     }
 }

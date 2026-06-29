@@ -46,7 +46,10 @@
                     class="mt-3 bg-primary-500 hover:bg-primary-600 text-white px-5 py-2 rounded-lg font-medium transition-all">
                 <i class="fas fa-folder-open mr-2"></i> Choisir des fichiers
             </button>
-            <p class="text-gray-600 text-xs mt-4">Formats : mp4, mkv, mov, webm, avi, m4v, ts — aucune limite de taille.</p>
+            <p class="text-gray-600 text-xs mt-4">
+                Formats : mp4, mkv, mov, webm, avi, m4v, ts — aucune limite de taille. Plusieurs fichiers à la fois possibles.<br>
+                En cas de coupure ou de fermeture : re-déposez le <span class="text-gray-400">même fichier</span>, l'upload reprend là où il s'était arrêté.
+            </p>
         </div>
     </div>
 
@@ -267,7 +270,7 @@
             target: URL_CHUNK,
             chunkSize: 5 * 1024 * 1024,      // 5 Mo
             simultaneousUploads: 3,          // chunks en parallèle (débit gros fichiers + multi-upload)
-            testChunks: false,
+            testChunks: true,                // teste les morceaux déjà reçus → reprise après coupure/fermeture
             fileParameterName: 'file',
             maxChunkRetries: 5,
             chunkRetryInterval: 2000,

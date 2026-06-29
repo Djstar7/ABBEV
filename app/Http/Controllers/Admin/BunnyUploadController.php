@@ -8,15 +8,11 @@ use App\Models\BunnyUpload;
 use App\Services\BunnyStreamService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
-use Pion\Laravel\ChunkUpload\Exceptions\UploadMissingFileException;
-use Pion\Laravel\ChunkUpload\Handler\HandlerFactory;
-use Pion\Laravel\ChunkUpload\Receiver\FileReceiver;
 
 /**
  * Upload de vidéos vers la Bunny Library depuis le dashboard.
@@ -98,6 +94,20 @@ class BunnyUploadController extends Controller
             ], 422);
         }
 
+        // Reprise : si un upload du MÊME fichier (identifiant resumable stable) est
+        // déjà en cours de réception, on le réutilise au lieu d'en créer un nouveau.
+        // Le client re-déposera le fichier ; les morceaux déjà reçus seront ignorés.
+        $identifier = $data['identifier'] ?? null;
+        if ($identifier) {
+            $existing = BunnyUpload::where('resumable_identifier', $identifier)
+                ->where('status', 'uploading')
+                ->latest()
+                ->first();
+            if ($existing) {
+                return response()->json(['upload_id' => $existing->id, 'resumed' => true]);
+            }
+        }
+
         $title = trim((string) ($data['title'] ?? '')) !== ''
             ? $data['title']
             : pathinfo($data['filename'], PATHINFO_FILENAME);
@@ -107,53 +117,73 @@ class BunnyUploadController extends Controller
             'original_filename'    => $data['filename'],
             'title'                => $title,
             'size_bytes'           => $data['size'],
-            'resumable_identifier' => $data['identifier'] ?? null,
+            'resumable_identifier' => $identifier,
             'status'               => 'uploading',
             'progress'             => 0,
         ]);
 
-        return response()->json(['upload_id' => $upload->id]);
+        return response()->json(['upload_id' => $upload->id, 'resumed' => false]);
     }
 
     /**
-     * Réception d'un chunk (POST) ou test de présence (GET, resumable.js).
-     * Sur le dernier chunk, déclenche la finalisation + le Job de transfert.
+     * Réception chunkée (résumable). Chaque morceau est stocké séparément dans
+     * storage/app/chunks/{upload_id}/{n}.part. Détection des morceaux déjà reçus
+     * (GET de test resumable.js) ⇒ après une coupure réseau ou la fermeture de
+     * l'onglet, re-déposer le même fichier reprend là où ça s'était arrêté.
+     * Quand tous les morceaux sont là, on assemble le fichier puis on dispatche
+     * le transfert vers Bunny.
      */
     public function chunk(Request $request): JsonResponse
     {
-        // Requête de test resumable.js : on demande toujours l'envoi du chunk.
-        if ($request->isMethod('get')) {
-            return response()->json(['status' => 'upload'], 204);
-        }
-
         $upload = BunnyUpload::find($request->input('upload_id'));
         if (! $upload) {
             return response()->json(['error' => 'Upload introuvable.'], 404);
         }
-        if ($upload->isTerminal()) {
+        if ($upload->isTerminal() || $upload->local_path) {
             return response()->json(['error' => 'Upload déjà terminé.'], 409);
         }
 
-        $receiver = new FileReceiver('file', $request, HandlerFactory::classFromRequest($request));
+        $chunkNumber = (int) $request->input('resumableChunkNumber');   // 1-based
+        $totalChunks = (int) $request->input('resumableTotalChunks');
+        $chunkDir    = storage_path('app/chunks/' . $upload->id);
+        $chunkPath   = $chunkDir . '/' . $chunkNumber . '.part';
 
-        if ($receiver->isUploaded() === false) {
-            throw new UploadMissingFileException();
+        // GET : test de présence du morceau (reprise).
+        if ($request->isMethod('get')) {
+            return is_file($chunkPath)
+                ? response()->json(['status' => 'present'], 200)   // déjà reçu → resumable saute
+                : response()->json(['status' => 'absent'], 204);   // à envoyer
         }
 
-        $save = $receiver->receive();
-
-        if ($save->isFinished()) {
-            return $this->finalize($upload, $save->getFile());
+        // POST : réception du morceau.
+        if (! $request->hasFile('file')) {
+            return response()->json(['error' => 'Morceau manquant.'], 422);
         }
+        if (! is_dir($chunkDir)) {
+            @mkdir($chunkDir, 0775, true);
+        }
+        $request->file('file')->move($chunkDir, $chunkNumber . '.part');
 
-        // Chunk intermédiaire : progression de la réception nav→serveur.
-        $handler = $save->handler();
-        $percent = (int) $handler->getPercentageDone();
-
+        $received = count(glob($chunkDir . '/*.part') ?: []);
+        $percent  = $totalChunks > 0 ? (int) floor($received / $totalChunks * 100) : 0;
         $upload->update([
             'bytes_received' => (int) round($upload->size_bytes * $percent / 100),
             'progress'       => $percent,
         ]);
+
+        // Tous les morceaux reçus → assemblage (verrou anti-double si chunks en parallèle).
+        if ($totalChunks > 0 && $received >= $totalChunks) {
+            $lock = Cache::lock('bunny-assemble-' . $upload->id, 300);
+            if ($lock->get()) {
+                try {
+                    if (! $upload->fresh()->local_path) {
+                        return $this->assembleAndDispatch($upload, $chunkDir, $totalChunks);
+                    }
+                } finally {
+                    $lock->release();
+                }
+            }
+        }
 
         return response()->json([
             'status'   => 'uploading',
@@ -212,24 +242,42 @@ class BunnyUploadController extends Controller
      * --------------------------------------------------------------- */
 
     /**
-     * Fichier complet assemblé : on le déplace sur le disque PUBLIC (lisible
-     * immédiatement en local) et on enclenche le transfert autonome vers Bunny.
-     * Le même fichier sert à la fois au fallback local et au PUT vers Bunny.
+     * Concatène les morceaux (1..N) en un seul fichier sur le disque PUBLIC
+     * (lisible immédiatement en local), purge le dossier de morceaux, puis
+     * enclenche le transfert autonome vers Bunny. Le même fichier sert au
+     * fallback local ET au PUT vers Bunny.
      */
-    private function finalize(BunnyUpload $upload, UploadedFile $file): JsonResponse
+    private function assembleAndDispatch(BunnyUpload $upload, string $chunkDir, int $totalChunks): JsonResponse
     {
         $ext  = strtolower(pathinfo($upload->original_filename, PATHINFO_EXTENSION)) ?: 'mp4';
         $name = $upload->id . '_' . Str::random(8) . '.' . $ext;
 
-        // Déplacement (et non copie) du fichier fusionné vers storage/app/public/uploads.
         $destDir      = Storage::disk('public')->path(self::UPLOAD_DIR);
-        $relativePath = self::UPLOAD_DIR . '/' . $name;          // pour servir : asset('storage/'.$relativePath)
+        $relativePath = self::UPLOAD_DIR . '/' . $name;          // asset('storage/'.$relativePath)
         $absolutePath = $destDir . DIRECTORY_SEPARATOR . $name;  // pour le Job (PUT vers Bunny)
 
         if (! is_dir($destDir)) {
             @mkdir($destDir, 0775, true);
         }
-        $file->move($destDir, $name);
+
+        // Concaténation en streaming (empreinte mémoire constante, même pour 5 Go).
+        $out = fopen($absolutePath, 'wb');
+        try {
+            for ($i = 1; $i <= $totalChunks; $i++) {
+                $part = $chunkDir . '/' . $i . '.part';
+                if (! is_file($part)) {
+                    throw new \RuntimeException("Morceau manquant à l'assemblage : {$i}/{$totalChunks}");
+                }
+                $in = fopen($part, 'rb');
+                stream_copy_to_stream($in, $out);
+                fclose($in);
+            }
+        } finally {
+            fclose($out);
+        }
+
+        // Purge des morceaux : le fichier complet est assemblé.
+        \Illuminate\Support\Facades\File::deleteDirectory($chunkDir);
 
         $upload->update([
             'temp_path'      => $absolutePath,
