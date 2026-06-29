@@ -57,7 +57,8 @@ class BunnyStreamService
                 'Accept'    => 'application/json',
             ])
             ->acceptJson()
-            ->timeout(30);
+            ->connectTimeout(5) // échoue vite si Bunny est injoignable (évite que l'UI tourne)
+            ->timeout(15);
     }
 
     /**

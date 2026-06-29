@@ -237,9 +237,74 @@ class BunnyUploadController extends Controller
         return response()->json($this->present($upload));
     }
 
+    /** Supprime un upload (fichier local + morceaux + ligne). */
+    public function destroy(BunnyUpload $upload): JsonResponse
+    {
+        $res = $this->deleteOne($upload);
+
+        return response()->json($res, $res['deleted'] ? 200 : 422);
+    }
+
+    /** Supprime plusieurs uploads d'un coup (sélection multiple). */
+    public function bulkDestroy(Request $request): JsonResponse
+    {
+        $ids = $request->validate([
+            'ids'   => 'required|array|min:1',
+            'ids.*' => 'integer',
+        ])['ids'];
+
+        $deleted = 0;
+        $skipped = [];
+
+        foreach (BunnyUpload::whereIn('id', $ids)->get() as $upload) {
+            $res = $this->deleteOne($upload);
+            if ($res['deleted']) {
+                $deleted++;
+            } else {
+                $skipped[] = ['id' => $upload->id, 'title' => $upload->title, 'reason' => $res['reason']];
+            }
+        }
+
+        return response()->json(['deleted' => $deleted, 'skipped' => $skipped]);
+    }
+
     /* ---------------------------------------------------------------
      |  Helpers
      * --------------------------------------------------------------- */
+
+    /**
+     * Supprime un upload et ses fichiers. Refuse si la vidéo locale est encore
+     * rattachée à un film ou un épisode (pour ne pas casser une lecture).
+     *
+     * @return array{deleted: bool, reason?: string}
+     */
+    private function deleteOne(BunnyUpload $upload): array
+    {
+        if ($upload->local_path) {
+            $used = \App\Models\Media::where('video_provider', 'local')->where('video_path', $upload->local_path)->exists()
+                || \App\Models\Episode::where('video_provider', 'local')->where('video_path', $upload->local_path)->exists();
+            if ($used) {
+                return ['deleted' => false, 'reason' => 'Rattachée à un film/épisode — détache-la d’abord.'];
+            }
+        }
+
+        // Fichiers (vidéo assemblée publique + chemins éventuels) et morceaux.
+        $paths = [
+            $upload->temp_path,
+            $upload->local_path ? public_path('storage/' . $upload->local_path) : null,
+        ];
+        foreach ($paths as $p) {
+            if ($p && is_file($p)) {
+                @unlink($p);
+            }
+        }
+        \Illuminate\Support\Facades\File::deleteDirectory(storage_path('app/chunks/' . $upload->id));
+
+        $upload->delete();
+        Cache::forget('bunny.videos.all');
+
+        return ['deleted' => true];
+    }
 
     /**
      * Concatène les morceaux (1..N) en un seul fichier sur le disque PUBLIC

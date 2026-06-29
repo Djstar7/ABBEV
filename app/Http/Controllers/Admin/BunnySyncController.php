@@ -90,8 +90,10 @@ class BunnySyncController extends Controller
         $error       = null;
 
         // 1. Vidéos Bunny (best-effort : si Bunny échoue, on garde les vidéos locales).
+        //    Si Bunny a échoué récemment, on ne re-tente pas tout de suite : ça évite
+        //    que le picker « tourne » 30 s à chaque ouverture (timeout réseau Bunny).
         $bunnyItems = collect();
-        if ($this->bunny->isConfigured()) {
+        if ($this->bunny->isConfigured() && ! Cache::get('bunny.unreachable')) {
             try {
                 $bunnyItems = collect($this->fetchVideosCached())
                     ->filter(function ($v) use ($usageMap, $includeGuid) {
@@ -120,8 +122,13 @@ class BunnySyncController extends Controller
                         'source' => 'bunny',
                     ]);
             } catch (\Throwable $e) {
+                // Bunny injoignable : on note l'indisponibilité 2 min pour ne pas
+                // re-bloquer le picker à chaque ouverture.
+                Cache::put('bunny.unreachable', true, 120);
                 $error = 'Bunny indisponible : '.$e->getMessage();
             }
+        } elseif (Cache::get('bunny.unreachable')) {
+            $error = 'Bunny momentanément injoignable — vidéos locales affichées.';
         } else {
             $error = 'Bunny non configuré.';
         }

@@ -58,8 +58,15 @@
 
     {{-- Uploads récents (rendu serveur) --}}
     <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 overflow-hidden">
-        <div class="px-6 py-4 border-b border-dark-200">
+        <div class="px-6 py-4 border-b border-dark-200 flex items-center justify-between gap-4">
             <h3 class="text-white font-semibold"><i class="fas fa-clock-rotate-left mr-2 text-gray-400"></i>Uploads récents</h3>
+            <div class="flex items-center gap-3">
+                <span id="bunny-sel-count" class="text-xs text-gray-500"></span>
+                <button type="button" id="bunny-delete-btn" disabled
+                        class="bg-red-500/80 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-all">
+                    <i class="fas fa-trash mr-2"></i>Supprimer la sélection
+                </button>
+            </div>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-sm" id="bunny-recent-table">
@@ -76,6 +83,7 @@
                 @endphp
                 <thead class="bg-dark-200/50 text-gray-400 text-xs uppercase">
                     <tr>
+                        <th class="px-4 py-3"><input type="checkbox" id="bunny-check-all" class="w-4 h-4 accent-red-500"></th>
                         <th class="text-left px-6 py-3">Titre</th>
                         <th class="text-left px-6 py-3">Statut</th>
                         <th class="text-left px-6 py-3">Progression</th>
@@ -88,6 +96,7 @@
                     @forelse($uploads as $u)
                         @php $meta = $statusMeta[$u->status] ?? ['—', 'bg-gray-500/20 text-gray-300']; $hasFile = $u->temp_path && is_file($u->temp_path); $localReady = $u->hasLocalCopy(); @endphp
                         <tr data-upload-id="{{ $u->id }}">
+                            <td class="px-4 py-3"><input type="checkbox" class="bunny-row-check w-4 h-4 accent-red-500" value="{{ $u->id }}"></td>
                             <td class="px-6 py-3 text-white">{{ $u->title }}</td>
                             <td class="px-6 py-3" data-cell="status">
                                 <span class="px-2 py-1 rounded text-xs font-medium {{ $meta[1] }}">{{ $meta[0] }}</span>
@@ -114,7 +123,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="px-6 py-6 text-center text-gray-500">Aucun upload pour l'instant.</td></tr>
+                        <tr><td colspan="7" class="px-6 py-6 text-center text-gray-500">Aucun upload pour l'instant.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -349,6 +358,56 @@
     document.querySelectorAll('[data-retry-row]').forEach((btn) => {
         btn.addEventListener('click', () => retryUpload(btn.getAttribute('data-retry-row')));
     });
+
+    /* ---------- Sélection multiple + suppression ---------- */
+    const checkAll  = document.getElementById('bunny-check-all');
+    const delBtn    = document.getElementById('bunny-delete-btn');
+    const selCount  = document.getElementById('bunny-sel-count');
+    const rowChecks = () => Array.from(document.querySelectorAll('.bunny-row-check'));
+    const selectedIds = () => rowChecks().filter(c => c.checked).map(c => c.value);
+
+    function refreshSelection() {
+        const n = selectedIds().length;
+        if (delBtn) delBtn.disabled = n === 0;
+        if (selCount) selCount.textContent = n ? `${n} sélectionnée(s)` : '';
+        if (checkAll) {
+            const all = rowChecks();
+            checkAll.checked = all.length > 0 && all.every(c => c.checked);
+            checkAll.indeterminate = all.some(c => c.checked) && !checkAll.checked;
+        }
+    }
+    if (checkAll) checkAll.addEventListener('change', () => {
+        rowChecks().forEach(c => { c.checked = checkAll.checked; });
+        refreshSelection();
+    });
+    rowChecks().forEach(c => c.addEventListener('change', refreshSelection));
+
+    if (delBtn) delBtn.addEventListener('click', async () => {
+        const ids = selectedIds();
+        if (!ids.length) return;
+        if (!confirm(`Supprimer définitivement ${ids.length} vidéo(s) ? Les fichiers locaux seront effacés. Les vidéos rattachées à un film/épisode seront ignorées.`)) return;
+        delBtn.disabled = true;
+        delBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Suppression…';
+        try {
+            const r = await fetch('{{ route('admin.bunny.uploads.bulk-delete') }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                body: JSON.stringify({ ids }),
+            });
+            const d = await r.json();
+            if (!r.ok) { alert(d.message || 'Suppression impossible.'); return; }
+            if (d.skipped && d.skipped.length) {
+                alert(`${d.deleted} supprimée(s).\nIgnorées (rattachées à un film/épisode) : ` +
+                      d.skipped.map(s => `• ${s.title}`).join('\n'));
+            }
+            window.location.reload();
+        } catch (e) {
+            alert('Erreur réseau lors de la suppression.');
+            delBtn.disabled = false;
+            delBtn.innerHTML = '<i class="fas fa-trash mr-2"></i>Supprimer la sélection';
+        }
+    });
+    refreshSelection();
 
     loadActive();
 })();

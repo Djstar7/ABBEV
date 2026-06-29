@@ -96,5 +96,7 @@ Route::middleware('auth')->prefix('admin')->group(function () {
         Route::get('/uploads/{upload}/status',       [BunnyUploadController::class, 'status'])->name('uploads.status');
         Route::get('/uploads/{upload}/download',     [BunnyUploadController::class, 'download'])->name('uploads.download');
         Route::post('/uploads/{upload}/retry',       [BunnyUploadController::class, 'retry'])->name('uploads.retry');
+        Route::post('/uploads/bulk-delete',          [BunnyUploadController::class, 'bulkDestroy'])->name('uploads.bulk-delete');
+        Route::delete('/uploads/{upload}',           [BunnyUploadController::class, 'destroy'])->name('uploads.destroy');
     });
 });
