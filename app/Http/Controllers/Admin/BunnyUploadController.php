@@ -58,18 +58,13 @@ class BunnyUploadController extends Controller
     }
 
     /**
-     * JSON des uploads à afficher au chargement : ceux encore en cours, plus les
-     * échecs dont l'original local est encore là (récupérer / relancer).
+     * JSON des uploads RÉELLEMENT en cours (ni prêts, ni échoués) pour le polling.
+     * Les états terminaux sont rendus côté serveur et ne sont pas re-poll.
      */
     public function active(): JsonResponse
     {
         $uploads = BunnyUpload::query()
-            ->where(function ($q) {
-                $q->whereNotIn('status', BunnyUpload::TERMINAL)
-                  ->orWhere(function ($q2) {
-                      $q2->where('status', 'failed')->whereNotNull('temp_path');
-                  });
-            })
+            ->whereNotIn('status', BunnyUpload::TERMINAL)
             ->latest()
             ->get()
             ->map(fn (BunnyUpload $u) => $this->present($u));

@@ -321,15 +321,11 @@
             <div class="text-[11px] text-gray-500 mt-1">${label} · ${d.progress||0}%${d.size_bytes?' · '+human(d.size_bytes):''}</div>`;
     }
 
-    /* ---------- Mise à jour d'une ligne du tableau ---------- */
+    /* ---------- Mise à jour live d'une ligne du tableau (jamais de reload ici) ---------- */
     function upsertRow(d){
-        let row = tableBody.querySelector(`tr[data-upload-id="${d.id}"]`);
-        if(!row){ scheduleReload(); return; } // nouvel upload → rendu serveur complet
+        const row = tableBody.querySelector(`tr[data-upload-id="${d.id}"]`);
+        if(!row) return; // hors page/filtre courant → on ne touche à rien
         row.dataset.status = d.status;
-        // Atteinte d'un état terminal (prête / dispo local / échec) → recharge pour
-        // afficher le statut convivial ET les bonnes actions (rendus côté serveur).
-        if(TERMINAL.includes(d.status)){ scheduleReload(); return; }
-        // Sinon : mise à jour live du pill + barre de progression.
         const stCell = row.querySelector('[data-cell="status"]');
         if(stCell){
             const span = stCell.querySelector('span'); if(span) span.outerHTML = pill(d.status);
@@ -344,18 +340,24 @@
     let reloadT=null;
     function scheduleReload(){ if(reloadT) return; reloadT=setTimeout(()=>window.location.reload(), 1500); }
 
-    /* ---------- Polling unique via /uploads/active ---------- */
+    /* ---------- Polling via /uploads/active (uniquement les uploads EN COURS) ---------- */
+    let prevActive=new Set();
     async function sync(){
         try{
             const r=await fetch(URL_ACTIVE,{headers:{'Accept':'application/json'}});
-            if(!r.ok) return;
+            if(!r.ok){ pollTimer=setTimeout(sync,5000); return; }
             const {data}=await r.json();
             const seen=new Set();
             (data||[]).forEach(d=>{ seen.add(String(d.id)); progressRow(d); upsertRow(d); });
             // retirer les cartes « en cours » devenues inactives
             Array.from(activeEl.children).forEach(c=>{ const id=c.id.replace('act-',''); if(!seen.has(id)) c.remove(); });
-            const stillActive=(data||[]).some(d=>!TERMINAL.includes(d.status));
-            if(stillActive){ pollTimer=setTimeout(sync, 3000); } else { pollTimer=null; }
+            // un upload qui ÉTAIT en cours et ne l'est plus = terminé → un seul reload
+            let finished=false;
+            prevActive.forEach(id=>{ if(!seen.has(id)) finished=true; });
+            prevActive=seen;
+            if(finished){ scheduleReload(); return; }
+            // on continue de poller tant qu'il reste des uploads en cours
+            pollTimer = seen.size>0 ? setTimeout(sync, 3000) : null;
         }catch(e){ pollTimer=setTimeout(sync, 5000); }
     }
     function ensurePolling(){ if(!pollTimer) sync(); }
