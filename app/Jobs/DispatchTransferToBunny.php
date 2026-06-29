@@ -7,7 +7,10 @@ use App\Services\BunnyStreamService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Transfère un fichier déjà reçu côté serveur vers la Bunny Library, de façon
@@ -69,6 +72,16 @@ class DispatchTransferToBunny implements ShouldQueue
             $this->pollTranscoding($bunny, $upload);
 
             return;
+        }
+
+        // --- Assemblage des morceaux (déporté ici pour ne pas bloquer la requête web).
+        //     Une fois assemblé, la vidéo est lisible en local, même sans Bunny.
+        if (! $upload->local_path) {
+            $this->assembleChunks($upload);
+            $upload->refresh();
+            if ($upload->isTerminal()) { // assemblage échoué
+                return;
+            }
         }
 
         // Bunny non configuré : on n'essaie pas (la vidéo reste lisible en local).
@@ -230,6 +243,60 @@ class DispatchTransferToBunny implements ShouldQueue
             // On NE supprime PAS temp_path ici : permet un re-dispatch manuel.
             $upload->markFailed($e->getMessage());
         }
+    }
+
+    /**
+     * Concatène les morceaux reçus (storage/app/chunks/{id}/{n}.part) en un seul
+     * fichier sur le disque PUBLIC (lisible en local), en streaming (empreinte
+     * mémoire constante même pour 5 Go), puis purge le dossier de morceaux.
+     * Exécuté par le worker → ne bloque jamais une requête web.
+     */
+    protected function assembleChunks(BunnyUpload $upload): void
+    {
+        $chunkDir = storage_path('app/chunks/' . $upload->id);
+        $parts    = glob($chunkDir . '/*.part') ?: [];
+
+        if (empty($parts)) {
+            $upload->markFailed('Morceaux introuvables pour l’assemblage.');
+
+            return;
+        }
+
+        // Tri numérique (1.part, 2.part, …, 10.part) — pas alphabétique.
+        usort($parts, fn ($a, $b) => ((int) basename($a)) <=> ((int) basename($b)));
+
+        $ext  = strtolower(pathinfo($upload->original_filename, PATHINFO_EXTENSION)) ?: 'mp4';
+        $name = $upload->id . '_' . Str::random(8) . '.' . $ext;
+
+        $destDir      = Storage::disk('public')->path('uploads');
+        $relativePath = 'uploads/' . $name;
+        $absolutePath = $destDir . DIRECTORY_SEPARATOR . $name;
+
+        if (! is_dir($destDir)) {
+            @mkdir($destDir, 0775, true);
+        }
+
+        $out = fopen($absolutePath, 'wb');
+        try {
+            foreach ($parts as $part) {
+                $in = fopen($part, 'rb');
+                stream_copy_to_stream($in, $out);
+                fclose($in);
+            }
+        } finally {
+            fclose($out);
+        }
+
+        File::deleteDirectory($chunkDir);
+
+        $upload->update([
+            'temp_path'      => $absolutePath,
+            'local_path'     => $relativePath,
+            'bytes_received' => $upload->size_bytes,
+            'progress'       => 100,
+        ]);
+
+        Cache::forget('bunny.videos.all'); // dispo immédiate dans le picker (local)
     }
 
     /**

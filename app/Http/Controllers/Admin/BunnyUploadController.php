@@ -10,8 +10,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
@@ -25,14 +23,6 @@ use Illuminate\View\View;
  */
 class BunnyUploadController extends Controller
 {
-    /**
-     * Dossier (relatif au disque PUBLIC) où vit le fichier assemblé.
-     * Stocké sur le disque public ⇒ immédiatement lisible en local (fallback
-     * automatique) tant que Bunny n'a pas pris le relais. Un seul fichier, pas
-     * de double copie. Supprimé en arrière-plan une fois la vidéo prête côté Bunny.
-     */
-    private const UPLOAD_DIR = 'uploads';
-
     /** Extensions vidéo acceptées. */
     private const ALLOWED_EXT = ['mp4', 'mkv', 'mov', 'webm', 'avi', 'm4v', 'ts'];
 
@@ -171,18 +161,30 @@ class BunnyUploadController extends Controller
             'progress'       => $percent,
         ]);
 
-        // Tous les morceaux reçus → assemblage (verrou anti-double si chunks en parallèle).
+        // Tous les morceaux reçus → on délègue l'ASSEMBLAGE au worker (verrou anti-double).
+        // L'assemblage (concaténation, potentiellement longue pour un gros fichier) ne se
+        // fait PAS dans la requête web : elle répond tout de suite, le worker assemble puis
+        // transfère. La réception ne pénalise donc jamais le service.
         if ($totalChunks > 0 && $received >= $totalChunks) {
-            $lock = Cache::lock('bunny-assemble-' . $upload->id, 300);
+            $lock = Cache::lock('bunny-finalize-' . $upload->id, 60);
             if ($lock->get()) {
                 try {
-                    if (! $upload->fresh()->local_path) {
-                        return $this->assembleAndDispatch($upload, $chunkDir, $totalChunks);
+                    $fresh = $upload->fresh();
+                    if ($fresh->status === 'uploading' && ! $fresh->local_path) {
+                        $upload->update([
+                            'status'         => 'queued',
+                            'progress'       => 100,
+                            'bytes_received' => $upload->size_bytes,
+                            'uploaded_at'    => now(),
+                        ]);
+                        DispatchTransferToBunny::dispatch($upload->id);
                     }
                 } finally {
                     $lock->release();
                 }
             }
+
+            return response()->json(['status' => 'queued', 'done' => 100, 'uploadId' => $upload->id]);
         }
 
         return response()->json([
@@ -304,65 +306,6 @@ class BunnyUploadController extends Controller
         Cache::forget('bunny.videos.all');
 
         return ['deleted' => true];
-    }
-
-    /**
-     * Concatène les morceaux (1..N) en un seul fichier sur le disque PUBLIC
-     * (lisible immédiatement en local), purge le dossier de morceaux, puis
-     * enclenche le transfert autonome vers Bunny. Le même fichier sert au
-     * fallback local ET au PUT vers Bunny.
-     */
-    private function assembleAndDispatch(BunnyUpload $upload, string $chunkDir, int $totalChunks): JsonResponse
-    {
-        $ext  = strtolower(pathinfo($upload->original_filename, PATHINFO_EXTENSION)) ?: 'mp4';
-        $name = $upload->id . '_' . Str::random(8) . '.' . $ext;
-
-        $destDir      = Storage::disk('public')->path(self::UPLOAD_DIR);
-        $relativePath = self::UPLOAD_DIR . '/' . $name;          // asset('storage/'.$relativePath)
-        $absolutePath = $destDir . DIRECTORY_SEPARATOR . $name;  // pour le Job (PUT vers Bunny)
-
-        if (! is_dir($destDir)) {
-            @mkdir($destDir, 0775, true);
-        }
-
-        // Concaténation en streaming (empreinte mémoire constante, même pour 5 Go).
-        $out = fopen($absolutePath, 'wb');
-        try {
-            for ($i = 1; $i <= $totalChunks; $i++) {
-                $part = $chunkDir . '/' . $i . '.part';
-                if (! is_file($part)) {
-                    throw new \RuntimeException("Morceau manquant à l'assemblage : {$i}/{$totalChunks}");
-                }
-                $in = fopen($part, 'rb');
-                stream_copy_to_stream($in, $out);
-                fclose($in);
-            }
-        } finally {
-            fclose($out);
-        }
-
-        // Purge des morceaux : le fichier complet est assemblé.
-        \Illuminate\Support\Facades\File::deleteDirectory($chunkDir);
-
-        $upload->update([
-            'temp_path'      => $absolutePath,
-            'local_path'     => $relativePath,
-            'bytes_received' => $upload->size_bytes,
-            'progress'       => 100,
-            'status'         => 'queued',
-            'uploaded_at'    => now(),
-        ]);
-
-        // La vidéo est dès maintenant attribuable (local) dans le picker.
-        Cache::forget('bunny.videos.all');
-
-        DispatchTransferToBunny::dispatch($upload->id);
-
-        return response()->json([
-            'status'   => 'queued',
-            'done'     => 100,
-            'uploadId' => $upload->id,
-        ]);
     }
 
     private function present(BunnyUpload $upload): array
