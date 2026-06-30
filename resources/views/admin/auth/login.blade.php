@@ -613,7 +613,7 @@
                         <input type="email"
                                id="email"
                                name="email"
-                               value="{{ old('email', 'admin@abbev.com') }}"
+                               value="{{ old('email') }}"
                                placeholder="admin@example.com"
                                required
                                autofocus>
@@ -627,7 +627,7 @@
                         <input type="password"
                                id="password"
                                name="password"
-                               value="password"
+                               value=""
                                placeholder="Entrez votre mot de passe"
                                required>
                         <i class="fas fa-lock input-icon"></i>
@@ -646,12 +646,6 @@
                     Se connecter
                 </button>
 
-                <div class="credentials-info">
-                    <p>
-                        <i class="fas fa-info-circle"></i>
-                        Utilisez <span>admin@abbev.com</span> / <span>password</span>
-                    </p>
-                </div>
             </form>
 
             <div class="footer">
