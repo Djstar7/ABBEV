@@ -15,11 +15,11 @@ class AuthController extends Controller
      */
     public function showLogin()
     {
-        if (Auth::check() && Auth::user()->role === 'admin') {
+        if (Auth::check() && Auth::user()->isStaff()) {
             return redirect()->route('admin.dashboard');
         }
 
-        // If user is authenticated but not admin, log them out to avoid redirect loop
+        // If user is authenticated but not staff (admin/producer), log them out
         if (Auth::check()) {
             Auth::logout();
             request()->session()->invalidate();
@@ -44,8 +44,8 @@ class AuthController extends Controller
         if (Auth::attempt($credentials, $request->filled('remember'))) {
             $user = Auth::user();
 
-            // Check if user is admin
-            if ($user->role !== 'admin') {
+            // Seuls les membres du panel (admin ou producteur) peuvent se connecter ici
+            if (! $user->isStaff()) {
                 Auth::logout();
                 return back()->withErrors(['email' => 'Accès non autorisé.']);
             }

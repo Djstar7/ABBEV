@@ -23,6 +23,8 @@ class EpisodeController extends Controller
 
     public function index(Media $media)
     {
+        $this->authorizeMediaOwnership($media);
+
         if (! $media->isSeries()) {
             return redirect()->route('media.index')->with('error', "Ce média n'est pas une série.");
         }
@@ -34,6 +36,8 @@ class EpisodeController extends Controller
 
     public function createSeason(Request $request, Media $media)
     {
+        $this->authorizeMediaOwnership($media);
+
         $validated = $request->validate([
             'season_number' => 'required|integer|min:1',
             'title'         => 'nullable|string|max:255',
@@ -49,11 +53,15 @@ class EpisodeController extends Controller
 
     public function create(Season $season)
     {
+        $this->authorizeMediaOwnership($season->media);
+
         return view('episodes.create', compact('season'));
     }
 
     public function store(Request $request, Season $season)
     {
+        $this->authorizeMediaOwnership($season->media);
+
         $validated = $request->validate([
             'episode_number' => 'required|integer|min:1',
             'title'          => 'required|string|max:255',
@@ -83,12 +91,15 @@ class EpisodeController extends Controller
     public function edit(Episode $episode)
     {
         $season = $episode->season;
+        $this->authorizeMediaOwnership($season->media);
 
         return view('episodes.edit', compact('episode', 'season'));
     }
 
     public function update(Request $request, Episode $episode)
     {
+        $this->authorizeMediaOwnership($episode->season->media);
+
         $validated = $request->validate([
             'title'          => 'required|string|max:255',
             'description'    => 'nullable|string',
@@ -122,6 +133,7 @@ class EpisodeController extends Controller
     {
         $season = $episode->season;
         $media  = $season->media;
+        $this->authorizeMediaOwnership($media);
 
         if ($episode->thumbnail_path) {
             Storage::disk('public')->delete($episode->thumbnail_path);
@@ -138,6 +150,7 @@ class EpisodeController extends Controller
     public function destroySeason(Season $season)
     {
         $media = $season->media;
+        $this->authorizeMediaOwnership($media);
         $num   = $season->season_number;
 
         foreach ($season->episodes as $ep) {
@@ -155,6 +168,18 @@ class EpisodeController extends Controller
     /* ---------------------------------------------------------------
      |  Helpers
      * --------------------------------------------------------------- */
+
+    /**
+     * Un producteur ne gère que les saisons/épisodes de SES séries.
+     */
+    protected function authorizeMediaOwnership(?Media $media): void
+    {
+        $user = auth()->user();
+        if ($user && $user->isProducer() && (! $media || $media->user_id !== $user->id)) {
+            abort(403, "Cette série ne vous appartient pas.");
+        }
+    }
+
     protected function buildPayload(array $validated, Request $request): array
     {
         $data = $validated;

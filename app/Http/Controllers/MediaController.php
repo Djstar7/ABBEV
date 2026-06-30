@@ -27,7 +27,10 @@ class MediaController extends Controller
 
     public function index()
     {
-        $media = Media::with('category')->latest()->paginate(12);
+        $media = Media::with('category')
+            ->visibleTo(auth()->user())
+            ->latest()
+            ->paginate(12);
 
         return view('media.index', compact('media'));
     }
@@ -86,6 +89,7 @@ class MediaController extends Controller
         }
 
         $data = $this->mediaPayload($request, $validated);
+        $data['user_id'] = auth()->id(); // propriétaire = créateur (producteur ou admin)
 
         // Visuels
         foreach (['thumbnail', 'cover', 'banner'] as $imgField) {
@@ -103,6 +107,7 @@ class MediaController extends Controller
 
     public function show(Media $medium)
     {
+        $this->authorizeOwnership($medium);
         $medium->load('category');
 
         $seasons = $medium->isSeries()
@@ -114,6 +119,7 @@ class MediaController extends Controller
 
     public function edit(Media $medium)
     {
+        $this->authorizeOwnership($medium);
         $categories = Category::orderBy('name')->get();
 
         $seasons = $medium->isSeries()
@@ -125,6 +131,8 @@ class MediaController extends Controller
 
     public function update(Request $request, Media $medium)
     {
+        $this->authorizeOwnership($medium);
+
         $validated = $request->validate([
             'type'         => 'required|in:movie,series',
             'category_id'  => 'required|exists:categories,id',
@@ -176,6 +184,8 @@ class MediaController extends Controller
 
     public function destroy(Media $medium)
     {
+        $this->authorizeOwnership($medium);
+
         foreach (['thumbnail_path', 'cover_path', 'banner_path'] as $col) {
             if ($medium->$col && ! str_starts_with($medium->$col, 'http')) {
                 Storage::disk('public')->delete($medium->$col);
@@ -191,6 +201,17 @@ class MediaController extends Controller
     /* ---------------------------------------------------------------
      |  Helpers
      * --------------------------------------------------------------- */
+
+    /**
+     * Un producteur ne peut agir que sur SES contenus. L'admin peut tout.
+     */
+    protected function authorizeOwnership(Media $medium): void
+    {
+        $user = auth()->user();
+        if ($user && $user->isProducer() && $medium->user_id !== $user->id) {
+            abort(403, "Ce contenu ne vous appartient pas.");
+        }
+    }
 
     /**
      * Génère un slug unique à partir du titre (suffixe -2, -3… si déjà pris).

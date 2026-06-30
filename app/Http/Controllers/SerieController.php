@@ -10,6 +10,7 @@ class SerieController extends Controller
     public function index()
     {
         $series = Media::where('type', 'series')
+            ->visibleTo(auth()->user())
             ->with('category')
             ->latest()
             ->paginate(16);

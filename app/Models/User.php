@@ -15,11 +15,29 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
-     * Rôles disponibles : 'admin' | 'user'.
+     * Rôles disponibles : 'admin' | 'producer' | 'user'.
      */
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    /** Producteur : gère uniquement ses propres contenus. */
+    public function isProducer(): bool
+    {
+        return $this->role === 'producer';
+    }
+
+    /** Membre du panel (admin ou producteur) : a accès au dashboard. */
+    public function isStaff(): bool
+    {
+        return in_array($this->role, ['admin', 'producer'], true);
+    }
+
+    /** Contenus (films/séries) dont cet utilisateur est propriétaire. */
+    public function media()
+    {
+        return $this->hasMany(Media::class);
     }
 
     /**

@@ -17,50 +17,66 @@ class DashboardController extends Controller
      */
     public function index()
     {
-        // Users statistics
-        $stats['users'] = [
+        $user       = auth()->user();
+        $isProducer = $user->isProducer();
+
+        // Contenus visibles selon le rôle (producteur = ses contenus, admin = tout)
+        $media = fn () => Media::query()->visibleTo($user);
+
+        // Users statistics — réservé aux admins
+        $stats['users'] = $isProducer ? null : [
             'total' => User::count(),
             'admins' => User::where('role', 'admin')->count(),
             'users' => User::where('role', 'user')->count(),
             'users_today' => User::whereDate('created_at', today())->count(),
         ];
 
-        // Media statistics
+        // Media statistics (cloisonnées)
         $stats['media'] = [
-            'total' => Media::count(),
-            'movies' => Media::where('type', 'movie')->count(),
-            'series' => Media::where('type', 'series')->count(),
-            'recent' => Media::whereDate('created_at', '>=', Carbon::now()->subDays(7))->count(),
+            'total' => $media()->count(),
+            'movies' => $media()->where('type', 'movie')->count(),
+            'series' => $media()->where('type', 'series')->count(),
+            'recent' => $media()->whereDate('created_at', '>=', Carbon::now()->subDays(7))->count(),
         ];
 
         // Categories statistics
         $stats['categories'] = [
-            'total' => Category::count(),
+            'total' => $isProducer
+                ? $media()->distinct('category_id')->count('category_id')
+                : Category::count(),
         ];
 
-        // Chart data for last 30 days
+        // Chart data for last 30 days (cloisonné)
         $chartData = [
             'media' => [
                 'labels' => $this->getLast30DaysLabels(),
-                'movies' => $this->getLast30DaysData(Media::where('type', 'movie')),
-                'series' => $this->getLast30DaysData(Media::where('type', 'series')),
+                'movies' => $this->getLast30DaysData(Media::where('type', 'movie')->visibleTo($user)),
+                'series' => $this->getLast30DaysData(Media::where('type', 'series')->visibleTo($user)),
             ],
-            'users' => [
+            'users' => $isProducer ? null : [
                 'labels' => $this->getLast30DaysLabels(),
                 'data' => $this->getLast30DaysData(User::query()),
             ],
         ];
 
-        // Top categories
-        $topCategories = Category::withCount('media')
-            ->orderBy('media_count', 'desc')
-            ->take(5)
-            ->get();
+        // Top categories (cloisonnées pour le producteur)
+        $topCategories = $isProducer
+            ? Category::withCount(['media' => fn ($q) => $q->visibleTo($user)])
+                ->orderByDesc('media_count')
+                ->take(10)
+                ->get()
+                ->filter(fn ($c) => $c->media_count > 0)
+                ->take(5)
+                ->values()
+            : Category::withCount('media')
+                ->orderBy('media_count', 'desc')
+                ->take(5)
+                ->get();
 
-        // Recent media
-        $recentMedia = Media::with('category')->latest()->take(10)->get();
+        // Recent media (cloisonné)
+        $recentMedia = $media()->with('category')->latest()->take(10)->get();
 
-        return view('admin.dashboard', compact('stats', 'chartData', 'topCategories', 'recentMedia'));
+        return view('admin.dashboard', compact('stats', 'chartData', 'topCategories', 'recentMedia', 'isProducer'));
     }
 
     /**

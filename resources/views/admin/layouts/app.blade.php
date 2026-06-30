@@ -132,6 +132,7 @@
                         Séries
                     </a>
 
+                    @if(auth()->user()->isAdmin())
                     <a href="{{ route('categories.index') }}"
                        class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('categories.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
                         <i class="fas fa-th-large w-5 mr-3"></i>
@@ -149,6 +150,7 @@
                         <i class="fas fa-cloud w-5 mr-3"></i>
                         Bunny Library
                     </a>
+                    @endif
 
                     @php
                         $__activeUploads = \App\Models\BunnyUpload::whereNotIn('status', \App\Models\BunnyUpload::TERMINAL)->count();
@@ -163,6 +165,7 @@
                     </a>
                 </div>
 
+                @if(auth()->user()->isAdmin())
                 <!-- Section Utilisateurs -->
                 <div class="mt-8 pt-6 border-t border-dark-200">
                     <p class="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Utilisateurs</p>
@@ -177,6 +180,12 @@
                        class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('administrators.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
                         <i class="fas fa-user-shield w-5 mr-3"></i>
                         Administrateurs
+                    </a>
+
+                    <a href="{{ route('producers.index') }}"
+                       class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('producers.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
+                        <i class="fas fa-clapperboard w-5 mr-3"></i>
+                        Producteurs
                     </a>
                 </div>
 
@@ -207,6 +216,7 @@
                         Configuration
                     </a>
                 </div>
+                @endif
             </nav>
 
             <!-- User Info at bottom -->
@@ -217,7 +227,7 @@
                     </div>
                     <div class="ml-3 flex-1">
                         <p class="text-sm font-medium text-white">{{ auth()->user()->name ?? 'Admin' }}</p>
-                        <p class="text-xs text-gray-400">Administrateur</p>
+                        <p class="text-xs text-gray-400">{{ auth()->user()->isProducer() ? 'Producteur' : 'Administrateur' }}</p>
                     </div>
                     <form action="{{ route('admin.logout') }}" method="POST">
                         @csrf

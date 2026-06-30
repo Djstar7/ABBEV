@@ -89,6 +89,13 @@ class BunnySyncController extends Controller
         $usageMap    = $this->buildUsageMap();
         $error       = null;
 
+        // Cloisonnement producteur : il ne voit QUE ses propres vidéos.
+        $user     = $request->user();
+        $producer = $user && $user->isProducer();
+        $ownGuids = $producer
+            ? BunnyUpload::where('user_id', $user->id)->whereNotNull('bunny_guid')->pluck('bunny_guid')->all()
+            : null; // null = aucune restriction (admin)
+
         // 1. Vidéos Bunny (best-effort : si Bunny échoue, on garde les vidéos locales).
         //    Si Bunny a échoué récemment, on ne re-tente pas tout de suite : ça évite
         //    que le picker « tourne » 30 s à chaque ouverture (timeout réseau Bunny).
@@ -96,13 +103,17 @@ class BunnySyncController extends Controller
         if ($this->bunny->isConfigured() && ! Cache::get('bunny.unreachable')) {
             try {
                 $bunnyItems = collect($this->fetchVideosCached())
-                    ->filter(function ($v) use ($usageMap, $includeGuid) {
+                    ->filter(function ($v) use ($usageMap, $includeGuid, $ownGuids) {
                         $guid = $v['guid'] ?? null;
                         if (! $guid) {
                             return false;
                         }
                         if ($includeGuid && $guid === $includeGuid) {
                             return true;
+                        }
+                        // Producteur : seulement les vidéos Bunny lui appartenant.
+                        if ($ownGuids !== null && ! in_array($guid, $ownGuids, true)) {
+                            return false;
                         }
                         return ! isset($usageMap[$guid]);
                     })
@@ -133,8 +144,8 @@ class BunnySyncController extends Controller
             $error = 'Bunny non configuré.';
         }
 
-        // 2. Vidéos locales publiées (fallback de test), non encore attribuées.
-        $localItems = $this->availableLocalVideos($usageMap, $q, $includeGuid);
+        // 2. Vidéos locales publiées (non encore attribuées), cloisonnées au producteur.
+        $localItems = $this->availableLocalVideos($usageMap, $q, $includeGuid, $producer ? $user->id : null);
 
         $items = $localItems->concat($bunnyItems)->values();
 
@@ -169,7 +180,7 @@ class BunnySyncController extends Controller
      *
      * @return \Illuminate\Support\Collection<int, array<string, mixed>>
      */
-    protected function availableLocalVideos(array $usageMap, string $q, ?string $includeGuid): \Illuminate\Support\Collection
+    protected function availableLocalVideos(array $usageMap, string $q, ?string $includeGuid, ?int $ownerId = null): \Illuminate\Support\Collection
     {
         // Chemins locaux déjà attribués à un film ou un épisode.
         $takenPaths = Media::query()->where('video_provider', 'local')->whereNotNull('video_path')->pluck('video_path')
@@ -178,6 +189,7 @@ class BunnySyncController extends Controller
 
         return BunnyUpload::query()
             ->whereNotNull('local_path')
+            ->when($ownerId, fn ($query) => $query->where('user_id', $ownerId)) // cloisonnement producteur
             ->latest()
             ->get()
             ->filter(fn (BunnyUpload $u) => $u->hasLocalCopy())

@@ -36,7 +36,7 @@ class BunnyUploadController extends Controller
         $q      = trim((string) $request->get('q', ''));
         $status = (string) $request->get('status', '');
 
-        $query = BunnyUpload::query()->latest();
+        $query = $this->scopedQuery()->latest();
 
         if ($q !== '') {
             $query->where('title', 'like', '%'.$q.'%');
@@ -70,13 +70,34 @@ class BunnyUploadController extends Controller
      */
     public function active(): JsonResponse
     {
-        $uploads = BunnyUpload::query()
+        $uploads = $this->scopedQuery()
             ->whereNotIn('status', BunnyUpload::TERMINAL)
             ->latest()
             ->get()
             ->map(fn (BunnyUpload $u) => $this->present($u));
 
         return response()->json(['data' => $uploads]);
+    }
+
+    /** Base de requête cloisonnée : un producteur ne voit QUE ses uploads. */
+    private function scopedQuery()
+    {
+        $query = BunnyUpload::query();
+        $user  = auth()->user();
+        if ($user && $user->isProducer()) {
+            $query->where('user_id', $user->id);
+        }
+
+        return $query;
+    }
+
+    /** Un producteur ne peut agir que sur SES uploads. */
+    private function authorizeUploadOwnership(BunnyUpload $upload): void
+    {
+        $user = auth()->user();
+        if ($user && $user->isProducer() && $upload->user_id !== $user->id) {
+            abort(403, "Cet upload ne vous appartient pas.");
+        }
     }
 
     /**
@@ -215,6 +236,8 @@ class BunnyUploadController extends Controller
     /** Statut JSON d'un upload (polling UI). */
     public function status(BunnyUpload $upload): JsonResponse
     {
+        $this->authorizeUploadOwnership($upload);
+
         return response()->json($this->present($upload));
     }
 
@@ -224,6 +247,8 @@ class BunnyUploadController extends Controller
      */
     public function download(BunnyUpload $upload): mixed
     {
+        $this->authorizeUploadOwnership($upload);
+
         if (! $upload->temp_path || ! is_file($upload->temp_path)) {
             abort(404, 'Fichier original non disponible (déjà transféré vers Bunny ou supprimé).');
         }
@@ -237,6 +262,8 @@ class BunnyUploadController extends Controller
      */
     public function retry(BunnyUpload $upload): JsonResponse
     {
+        $this->authorizeUploadOwnership($upload);
+
         if ($upload->status !== 'failed') {
             return response()->json(['error' => 'Seuls les uploads en échec peuvent être relancés.'], 422);
         }
@@ -260,6 +287,8 @@ class BunnyUploadController extends Controller
     /** Supprime un upload (fichier local + morceaux + ligne). */
     public function destroy(BunnyUpload $upload): JsonResponse
     {
+        $this->authorizeUploadOwnership($upload);
+
         $res = $this->deleteOne($upload);
 
         return response()->json($res, $res['deleted'] ? 200 : 422);
@@ -276,7 +305,7 @@ class BunnyUploadController extends Controller
         $deleted = 0;
         $skipped = [];
 
-        foreach (BunnyUpload::whereIn('id', $ids)->get() as $upload) {
+        foreach ($this->scopedQuery()->whereIn('id', $ids)->get() as $upload) {
             $res = $this->deleteOne($upload);
             if ($res['deleted']) {
                 $deleted++;

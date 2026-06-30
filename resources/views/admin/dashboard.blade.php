@@ -4,6 +4,7 @@
 @section('header', 'Dashboard')
 
 @section('content')
+@php $isProducer = $isProducer ?? false; @endphp
 <!-- Stats Cards -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
     <!-- Total Media Card -->
@@ -57,6 +58,7 @@
         </div>
     </div>
 
+    @if(! $isProducer)
     <!-- Users Card -->
     <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6 hover:shadow-2xl hover:shadow-green-500/10 transition-all duration-300 transform hover:-translate-y-1">
         <div class="flex items-center justify-between">
@@ -73,6 +75,19 @@
             </div>
         </div>
     </div>
+    @else
+    <!-- Upload shortcut (producteur) -->
+    <a href="{{ route('admin.bunny.uploads.index') }}" class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6 hover:shadow-2xl hover:shadow-primary-500/10 transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-between">
+        <div class="flex-1">
+            <p class="text-sm font-medium text-gray-400 mb-1">Mes vidéos</p>
+            <p class="text-lg font-bold text-white">Uploader du contenu</p>
+            <p class="text-sm text-primary-400 mt-2 flex items-center"><i class="fas fa-cloud-arrow-up mr-1"></i>Aller à l'upload</p>
+        </div>
+        <div class="w-14 h-14 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-lg shadow-primary-500/30">
+            <i class="fas fa-cloud-arrow-up text-2xl text-white"></i>
+        </div>
+    </a>
+    @endif
 </div>
 
 <!-- Secondary Stats -->
@@ -90,6 +105,7 @@
         </div>
     </div>
 
+    @if(! $isProducer)
     <!-- Admins Card -->
     <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6 hover:shadow-xl hover:shadow-yellow-500/10 transition-all duration-300">
         <div class="flex items-center justify-between">
@@ -115,6 +131,7 @@
             </div>
         </div>
     </div>
+    @endif
 </div>
 
 <!-- Charts Row -->
@@ -139,6 +156,7 @@
         </div>
     </div>
 
+    @if(! $isProducer)
     <!-- Users Chart -->
     <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-6">
         <div class="flex items-center justify-between mb-6">
@@ -154,6 +172,7 @@
             <canvas id="usersChart"></canvas>
         </div>
     </div>
+    @endif
 </div>
 
 <!-- Content Lists -->

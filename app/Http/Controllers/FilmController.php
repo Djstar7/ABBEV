@@ -10,6 +10,7 @@ class FilmController extends Controller
     public function index()
     {
         $films = Media::where('type', 'movie')
+            ->visibleTo(auth()->user())
             ->with('category')
             ->latest()
             ->paginate(16);

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Media extends Model
 {
     protected $fillable = [
+        'user_id',
         'category_id',
         'type',
         'title',
@@ -39,6 +41,25 @@ class Media extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /** Propriétaire du contenu (producteur ou admin créateur). */
+    public function producer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * Restreint la requête aux contenus visibles par un utilisateur du panel :
+     * un producteur ne voit que SES contenus ; un admin voit tout.
+     */
+    public function scopeVisibleTo(Builder $query, ?User $user): Builder
+    {
+        if ($user && $user->isProducer()) {
+            return $query->where('user_id', $user->id);
+        }
+
+        return $query; // admin (ou contexte non restreint) : tout
     }
 
     /**
