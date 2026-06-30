@@ -62,6 +62,9 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <!-- Resumable.js (persistent across PJAX navigations) -->
+    <script src="https://cdn.jsdelivr.net/npm/resumablejs@1.1.0/resumable.min.js"></script>
+
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
@@ -69,7 +72,7 @@
         [x-cloak] { display: none !important; }
     </style>
 
-    @stack('styles')
+    <div id="page-styles">@stack('styles')</div>
 </head>
 <body class="bg-dark-50" x-data="{ sidebarOpen: false }">
     <div class="min-h-screen">
@@ -147,10 +150,16 @@
                         Bunny Library
                     </a>
 
+                    @php
+                        $__activeUploads = \App\Models\BunnyUpload::whereNotIn('status', \App\Models\BunnyUpload::TERMINAL)->count();
+                    @endphp
                     <a href="{{ route('admin.bunny.uploads.index') }}"
                        class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('admin.bunny.uploads.*') || request()->routeIs('admin.bunny.upload.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
                         <i class="fas fa-cloud-arrow-up w-5 mr-3"></i>
                         Upload vidéos
+                        @if($__activeUploads > 0)
+                            <span class="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full bg-blue-500 text-white animate-pulse">{{ $__activeUploads }}</span>
+                        @endif
                     </a>
                 </div>
 
@@ -293,6 +302,223 @@
         </div>
     </div>
 
-    @stack('scripts')
+    <div id="page-scripts">@stack('scripts')</div>
+
+    {{-- Widget flottant d'upload (persiste entre les pages) --}}
+    <div id="abbev-upload-widget" class="fixed bottom-4 right-4 z-50 hidden">
+        <div class="bg-dark-100 border border-dark-200 rounded-xl shadow-2xl w-80 overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 cursor-pointer" onclick="ABBEV.uploads.toggleWidget()">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-cloud-arrow-up text-primary-400 animate-pulse"></i>
+                    <span class="text-white text-sm font-medium">Upload en cours</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-400" id="uw-count"></span>
+                    <i class="fas fa-chevron-up text-gray-500 text-xs" id="uw-chevron"></i>
+                </div>
+            </div>
+            <div class="h-1 bg-dark-300"><div class="h-1 bg-primary-500 transition-all" id="uw-bar" style="width:0%"></div></div>
+            <div id="uw-details" class="max-h-60 overflow-y-auto divide-y divide-dark-200/50"></div>
+        </div>
+    </div>
+
+    {{-- Script permanent : PJAX + moteur d'upload (jamais détruit) --}}
+    <script>
+    (function(){
+        'use strict';
+        const ABBEV = window.ABBEV = window.ABBEV || {};
+        const csrf = () => document.querySelector('meta[name="csrf-token"]').content;
+
+        /* ====== MOTEUR D'UPLOAD (Resumable.js, persistant) ====== */
+        const UE = ABBEV.uploads = {
+            r: null, inFlight: 0, items: new Map(), pollTimer: null, widgetOpen: true,
+
+            init() {
+                if (this.r || !window.Resumable) return;
+                this.r = new Resumable({
+                    target: '/admin/bunny/upload/chunk',
+                    chunkSize: 5*1024*1024, simultaneousUploads: 3,
+                    testChunks: true, fileParameterName: 'file',
+                    maxChunkRetries: 5, chunkRetryInterval: 2000,
+                    headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json' },
+                    query: (f) => ({ upload_id: f._uid }),
+                });
+
+                this.r.on('fileAdded', async (f) => {
+                    try {
+                        const res = await fetch('/admin/bunny/upload/start', {
+                            method:'POST',
+                            headers:{'Content-Type':'application/json','X-CSRF-TOKEN':csrf(),'Accept':'application/json'},
+                            body: JSON.stringify({filename:f.fileName||f.file.name, size:f.size, identifier:f.uniqueIdentifier}),
+                        });
+                        const d = await res.json();
+                        if (!res.ok) { alert(d.error||'Démarrage impossible.'); this.r.removeFile(f); return; }
+                        f._uid = d.upload_id;
+                        this.inFlight++;
+                        this.items.set(d.upload_id, {title:f.fileName, progress:0, status:'uploading', size:f.size});
+                        this.updateWidget();
+                        this.emit('progress',{id:d.upload_id,title:f.fileName,status:'uploading',progress:0,size_bytes:f.size});
+                        this.r.upload();
+                    } catch(e) { alert('Erreur réseau.'); this.r.removeFile(f); }
+                });
+
+                this.r.on('fileProgress', (f) => {
+                    if (!f._uid) return;
+                    const p = Math.floor(f.progress()*100);
+                    const it = this.items.get(f._uid);
+                    if (it) it.progress = p;
+                    this.updateWidget();
+                    this.emit('progress',{id:f._uid,title:f.fileName,status:'uploading',progress:p,size_bytes:f.size});
+                });
+
+                this.r.on('fileSuccess', (f) => {
+                    this.inFlight = Math.max(0, this.inFlight-1);
+                    if (f._uid) this.items.delete(f._uid);
+                    this.updateWidget();
+                    this.emit('complete',{id:f._uid});
+                    this.ensurePolling();
+                });
+
+                this.r.on('fileError', (f) => {
+                    this.inFlight = Math.max(0, this.inFlight-1);
+                    const it = f._uid && this.items.get(f._uid);
+                    if (it) it.status = 'failed';
+                    this.updateWidget();
+                    this.emit('error',{id:f._uid});
+                });
+            },
+
+            connectDropzone(drop, browse) {
+                if (!this.r) return;
+                this.r.assignDrop(drop);
+                this.r.assignBrowse(browse, false, false);
+            },
+
+            emit(t, d) { window.dispatchEvent(new CustomEvent('abbev:upload-'+t, {detail:d})); },
+
+            updateWidget() {
+                const w = document.getElementById('abbev-upload-widget');
+                if (!w) return;
+                const n = this.items.size;
+                w.classList.toggle('hidden', n===0 && this.inFlight===0);
+                if (n===0) return;
+                let total=0; this.items.forEach(it => total+=it.progress);
+                const avg = Math.floor(total/n);
+                const bar=document.getElementById('uw-bar'); if(bar) bar.style.width=avg+'%';
+                const cnt=document.getElementById('uw-count'); if(cnt) cnt.textContent=n+' fichier'+(n>1?'s':'')+' · '+avg+'%';
+                const det=document.getElementById('uw-details');
+                if (det && this.widgetOpen) {
+                    let h='';
+                    this.items.forEach((it,id)=>{
+                        h+='<div class="px-4 py-2"><p class="text-white text-xs truncate">'+it.title+'</p>'
+                          +'<div class="flex items-center gap-2 mt-1"><div class="flex-1 bg-dark-300 rounded-full h-1">'
+                          +'<div class="bg-primary-500 h-1 rounded-full" style="width:'+it.progress+'%"></div></div>'
+                          +'<span class="text-[10px] text-gray-400">'+it.progress+'%</span></div></div>';
+                    });
+                    det.innerHTML=h;
+                }
+            },
+
+            toggleWidget() {
+                this.widgetOpen=!this.widgetOpen;
+                const d=document.getElementById('uw-details'), c=document.getElementById('uw-chevron');
+                if(d) d.classList.toggle('hidden',!this.widgetOpen);
+                if(c){c.classList.toggle('fa-chevron-up',this.widgetOpen);c.classList.toggle('fa-chevron-down',!this.widgetOpen);}
+                this.updateWidget();
+            },
+
+            ensurePolling(){ if(!this.pollTimer) this.poll(); },
+
+            async poll(){
+                try{
+                    const r=await fetch('/admin/bunny/uploads/active',{headers:{'Accept':'application/json'}});
+                    if(!r.ok){this.pollTimer=setTimeout(()=>this.poll(),5000);return;}
+                    const{data}=await r.json();
+                    this.emit('status',{data:data||[]});
+                    this.pollTimer=(data||[]).length>0?setTimeout(()=>this.poll(),3000):null;
+                }catch(e){this.pollTimer=setTimeout(()=>this.poll(),5000);}
+            },
+        };
+
+        UE.init();
+
+        /* ====== PJAX (navigation sans rechargement) ====== */
+        async function pjax(url, push){
+            try{
+                const resp=await fetch(url);
+                if(!resp.ok) throw resp;
+                const html=await resp.text();
+                const doc=new DOMParser().parseFromString(html,'text/html');
+
+                const curMain=document.querySelector('main'), newMain=doc.querySelector('main');
+                if(curMain&&newMain) curMain.innerHTML=newMain.innerHTML;
+
+                // Re-exécuter les scripts spécifiques à la page
+                const curPS=document.getElementById('page-scripts'), newPS=doc.getElementById('page-scripts');
+                if(curPS&&newPS){
+                    curPS.innerHTML='';
+                    for(const el of [...newPS.querySelectorAll('script')]){
+                        const s=document.createElement('script');
+                        if(el.src) s.src=el.src; else s.textContent=el.textContent;
+                        curPS.appendChild(s);
+                    }
+                }
+
+                // Page styles
+                const curST=document.getElementById('page-styles'),newST=doc.getElementById('page-styles');
+                if(curST&&newST) curST.innerHTML=newST.innerHTML;
+
+                document.title=doc.title;
+                const nh=doc.querySelector('header h1'),ch=document.querySelector('header h1');
+                if(nh&&ch) ch.innerHTML=nh.innerHTML;
+                // Sidebar (active + badges)
+                const nn=doc.querySelector('aside nav'),cn=document.querySelector('aside nav');
+                if(nn&&cn) cn.innerHTML=nn.innerHTML;
+                // CSRF
+                const nc=doc.querySelector('meta[name="csrf-token"]'),cc=document.querySelector('meta[name="csrf-token"]');
+                if(nc&&cc) cc.content=nc.content;
+                // Alpine re-init
+                if(window.Alpine&&curMain) Alpine.initTree(curMain);
+
+                if(push!==false) history.pushState({pjax:1},'',url);
+                window.scrollTo(0,0);
+            }catch(e){ window.location.href=url; }
+        }
+
+        // Interception des liens
+        document.addEventListener('click',(e)=>{
+            if(e.defaultPrevented||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey) return;
+            const a=e.target.closest('a[href]');
+            if(!a||a.target==='_blank'||a.hasAttribute('download')) return;
+            const h=a.getAttribute('href');
+            if(!h||h.startsWith('#')||h.startsWith('javascript:')||h.startsWith('mailto:')) return;
+            try{
+                const u=new URL(a.href,location.origin);
+                if(u.origin!==location.origin) return;
+                e.preventDefault();
+                pjax(u.href);
+            }catch(ex){}
+        },true);
+
+        // Interception des formulaires GET (recherche, filtres)
+        document.addEventListener('submit',(e)=>{
+            const f=e.target;
+            if(!f||f.method.toUpperCase()!=='GET') return;
+            e.preventDefault();
+            const u=new URL(f.action,location.origin);
+            new FormData(f).forEach((v,k)=>{if(v)u.searchParams.set(k,v);else u.searchParams.delete(k);});
+            pjax(u.href);
+        },true);
+
+        window.addEventListener('popstate',()=>pjax(location.href,false));
+        history.replaceState({pjax:1},'',location.href);
+        ABBEV.navigate=pjax;
+
+        /* ====== BEFOREUNLOAD (fermeture de l'onglet uniquement) ====== */
+        window.addEventListener('beforeunload',(e)=>{
+            if(UE.inFlight>0){e.preventDefault();e.returnValue='';}
+        });
+    })();
+    </script>
 </body>
 </html>

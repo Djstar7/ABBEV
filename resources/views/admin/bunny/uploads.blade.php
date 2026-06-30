@@ -94,7 +94,7 @@
                         <input type="text" name="q" value="{{ $q }}" placeholder="Rechercher par nom…"
                                class="bg-dark-50 border border-dark-200 rounded-lg pl-8 pr-3 py-2 text-sm text-white w-52 focus:outline-none focus:border-primary-500">
                     </div>
-                    <select name="status" onchange="this.form.submit()" class="bg-dark-50 border border-dark-200 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500">
+                    <select name="status" onchange="this.form.requestSubmit()" class="bg-dark-50 border border-dark-200 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500">
                         <option value="" {{ $status === '' ? 'selected' : '' }}>Tous les statuts</option>
                         <option value="progress" {{ $status === 'progress' ? 'selected' : '' }}>En cours</option>
                         <option value="queued" {{ $status === 'queued' ? 'selected' : '' }}>En file</option>
@@ -134,8 +134,12 @@
                             $inProgress = in_array($u->status, ['uploading','transferring','processing'], true);
 
                             // Statut AFFICHÉ : une vidéo dispo en local n'est jamais « Échec » rouge.
+                            $isStalled = $u->status === 'uploading' && in_array($u->id, $stalledIds);
                             $note = null;
-                            if ($u->status === 'ready') {
+                            if ($isStalled) {
+                                $disp = ['Interrompu', 'bg-orange-500/15 text-orange-300 border-orange-500/30', 'fa-pause-circle'];
+                                $note = 'Re-déposez le même fichier pour reprendre l\'envoi';
+                            } elseif ($u->status === 'ready') {
                                 $disp = ['Sur Bunny', 'bg-green-500/15 text-green-300 border-green-500/30', 'fa-circle-check'];
                             } elseif ($localReady && $u->status === 'failed') {
                                 $disp = ['Disponible en local', 'bg-sky-500/15 text-sky-300 border-sky-500/30', 'fa-hard-drive'];
@@ -272,19 +276,21 @@
 @endsection
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/resumablejs@1.1.0/resumable.min.js"></script>
 <script>
 (function () {
-    const CSRF       = '{{ csrf_token() }}';
-    const URL_START  = '{{ route('admin.bunny.upload.start') }}';
-    const URL_CHUNK  = '{{ route('admin.bunny.upload.chunk') }}';
-    const URL_ACTIVE = '{{ route('admin.bunny.uploads.active') }}';
-    const URL_BASE   = '{{ url('admin/bunny/uploads') }}';
-    const URL_BULK   = '{{ route('admin.bunny.uploads.bulk-delete') }}';
+    // Nettoyage si re-visite PJAX
+    if (window._uploadsAbort) window._uploadsAbort.abort();
+    if (window._uploadsReloadT) { clearTimeout(window._uploadsReloadT); window._uploadsReloadT = null; }
+    const ac = new AbortController();
+    window._uploadsAbort = ac;
+    const sig = { signal: ac.signal };
 
-    const activeEl = document.getElementById('bunny-active');
+    const CSRF     = document.querySelector('meta[name="csrf-token"]').content;
+    const URL_BASE = '{{ url("admin/bunny/uploads") }}';
+    const URL_BULK = '{{ route("admin.bunny.uploads.bulk-delete") }}';
+
+    const activeEl  = document.getElementById('bunny-active');
     const tableBody = document.querySelector('#bunny-table tbody');
-    let pollTimer = null;
 
     const META = {
         uploading:    ['Réception','bg-blue-500/15 text-blue-300 border-blue-500/30','fa-arrow-up-from-bracket'],
@@ -293,115 +299,99 @@
         processing:   ['Encodage','bg-purple-500/15 text-purple-300 border-purple-500/30','fa-gears'],
         ready:        ['Prête','bg-green-500/15 text-green-300 border-green-500/30','fa-circle-check'],
         failed:       ['Échec','bg-red-500/15 text-red-300 border-red-500/30','fa-circle-exclamation'],
+        interrupted:  ['Interrompu','bg-orange-500/15 text-orange-300 border-orange-500/30','fa-pause-circle'],
     };
     const IN_PROGRESS = ['uploading','transferring','processing'];
-    const TERMINAL = ['ready','failed'];
+    const TERMINAL    = ['ready','failed'];
 
     function human(b){ b=Number(b)||0; const u=['o','Ko','Mo','Go','To']; let i=0; while(b>=1024&&i<u.length-1){b/=1024;i++;} return b.toFixed(i?1:0)+' '+u[i]; }
     function pill(s){ const m=META[s]||['—','bg-gray-500/15 text-gray-300 border-gray-500/30','fa-circle']; return `<span class="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border ${m[1]}"><i class="fas ${m[2]} text-[10px]"></i>${m[0]}</span>`; }
 
-    /* ---------- Zone « en cours » (compacte) ---------- */
+    /* ---------- Zone « en cours » (cartes compactes) ---------- */
     function progressRow(d){
+        if (!activeEl) return;
         let el = document.getElementById('act-'+d.id);
-        if (TERMINAL.includes(d.status) || d.status==='queued'){ if(el) el.remove(); return; }
+        if (TERMINAL.includes(d.status)||d.status==='queued'){ if(el) el.remove(); return; }
         if(!el){
             el=document.createElement('div'); el.id='act-'+d.id;
             el.className='bg-dark-100 rounded-xl border border-dark-200 px-4 py-3';
             activeEl.appendChild(el);
         }
-        const label = d.status==='uploading'?'Envoi vers le serveur':(d.status==='transferring'?'Transfert vers Bunny':'Encodage Bunny');
-        el.innerHTML=`
-            <div class="flex items-center justify-between mb-1.5 gap-3">
-                <span class="text-white text-sm truncate">${d.title||d.filename||('#'+d.id)}</span>
-                ${pill(d.status)}
-            </div>
-            <div class="w-full bg-dark-300 rounded-full h-1.5 overflow-hidden">
-                <div class="bg-primary-500 h-1.5 rounded-full transition-all" style="width:${d.progress||0}%"></div>
-            </div>
-            <div class="text-[11px] text-gray-500 mt-1">${label} · ${d.progress||0}%${d.size_bytes?' · '+human(d.size_bytes):''}</div>`;
+        const label=d.status==='uploading'?'Envoi vers le serveur':(d.status==='transferring'?'Transfert vers Bunny':'Encodage Bunny');
+        el.innerHTML=`<div class="flex items-center justify-between mb-1.5 gap-3"><span class="text-white text-sm truncate">${d.title||d.filename||('#'+d.id)}</span>${pill(d.status)}</div><div class="w-full bg-dark-300 rounded-full h-1.5 overflow-hidden"><div class="bg-primary-500 h-1.5 rounded-full transition-all" style="width:${d.progress||0}%"></div></div><div class="text-[11px] text-gray-500 mt-1">${label} · ${d.progress||0}%${d.size_bytes?' · '+human(d.size_bytes):''}</div>`;
     }
 
-    /* ---------- Mise à jour live d'une ligne du tableau (jamais de reload ici) ---------- */
+    /* ---------- Mise à jour live d'une ligne du tableau ---------- */
     function upsertRow(d){
-        const row = tableBody.querySelector(`tr[data-upload-id="${d.id}"]`);
-        if(!row) return; // hors page/filtre courant → on ne touche à rien
-        row.dataset.status = d.status;
-        const stCell = row.querySelector('[data-cell="status"]');
+        if (!tableBody) return;
+        const row=tableBody.querySelector(`tr[data-upload-id="${d.id}"]`);
+        if(!row) return;
+        row.dataset.status=d.status;
+        const stCell=row.querySelector('[data-cell="status"]');
         if(stCell){
-            const span = stCell.querySelector('span'); if(span) span.outerHTML = pill(d.status);
-            const bar = row.querySelector('[data-cell="progress"]');
+            const span=stCell.querySelector('span'); if(span) span.outerHTML=pill(d.status);
+            const bar=row.querySelector('[data-cell="progress"]');
             if(bar){
-                if(IN_PROGRESS.includes(d.status)){ bar.classList.remove('hidden'); const f=bar.querySelector('div>div'); if(f) f.style.width=(d.progress||0)+'%'; }
+                if(IN_PROGRESS.includes(d.status)){bar.classList.remove('hidden'); const f=bar.querySelector('div>div'); if(f) f.style.width=(d.progress||0)+'%';}
                 else bar.classList.add('hidden');
             }
         }
     }
 
-    let reloadT=null;
-    function scheduleReload(){ if(reloadT) return; reloadT=setTimeout(()=>window.location.reload(), 1500); }
+    function scheduleReload(){
+        if(window._uploadsReloadT) return;
+        window._uploadsReloadT=setTimeout(()=>{
+            window._uploadsReloadT=null;
+            if(window.ABBEV&&ABBEV.navigate) ABBEV.navigate(location.href);
+            else location.reload();
+        },1500);
+    }
 
-    /* ---------- Polling via /uploads/active (uniquement les uploads EN COURS) ---------- */
+    /* ---------- Connexion au moteur d'upload global ---------- */
+    const engine = window.ABBEV && window.ABBEV.uploads;
+    if (engine) {
+        engine.connectDropzone(
+            document.getElementById('bunny-dropzone'),
+            document.getElementById('bunny-browse')
+        );
+        // Synchroniser l'état en cours (si upload lancé depuis une visite précédente)
+        engine.items.forEach((it, id) => {
+            progressRow({id, title:it.title, status:it.status, progress:it.progress, size_bytes:it.size});
+        });
+        engine.ensurePolling();
+    }
+
+    // Écoute les événements du moteur global
+    window.addEventListener('abbev:upload-progress', (e)=>{ progressRow(e.detail); upsertRow(e.detail); }, sig);
+    window.addEventListener('abbev:upload-complete', (e)=>{ const el=document.getElementById('act-'+e.detail.id); if(el) el.remove(); scheduleReload(); }, sig);
+    window.addEventListener('abbev:upload-error', (e)=>{ const el=document.getElementById('act-'+e.detail.id); if(el){const l=el.querySelector('div:last-child'); if(l) l.textContent='Échec de la réception.';} }, sig);
+
+    // Statuts serveur (Phase 2 : queued/transferring/processing/ready)
     let prevActive=new Set();
-    async function sync(){
-        try{
-            const r=await fetch(URL_ACTIVE,{headers:{'Accept':'application/json'}});
-            if(!r.ok){ pollTimer=setTimeout(sync,5000); return; }
-            const {data}=await r.json();
-            const seen=new Set();
-            (data||[]).forEach(d=>{ seen.add(String(d.id)); progressRow(d); upsertRow(d); });
-            // retirer les cartes « en cours » devenues inactives
-            Array.from(activeEl.children).forEach(c=>{ const id=c.id.replace('act-',''); if(!seen.has(id)) c.remove(); });
-            // un upload qui ÉTAIT en cours et ne l'est plus = terminé → un seul reload
-            let finished=false;
-            prevActive.forEach(id=>{ if(!seen.has(id)) finished=true; });
-            prevActive=seen;
-            if(finished){ scheduleReload(); return; }
-            // on continue de poller tant qu'il reste des uploads en cours
-            pollTimer = seen.size>0 ? setTimeout(sync, 3000) : null;
-        }catch(e){ pollTimer=setTimeout(sync, 5000); }
-    }
-    function ensurePolling(){ if(!pollTimer) sync(); }
-
-    /* ---------- Resumable.js ---------- */
-    if (window.Resumable) {
-        const r = new Resumable({
-            target: URL_CHUNK, chunkSize: 5*1024*1024, simultaneousUploads: 3,
-            testChunks: true, fileParameterName: 'file', maxChunkRetries: 5, chunkRetryInterval: 2000,
-            headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-            query: (file) => ({ upload_id: file.uploadId }),
-        });
-        r.assignDrop(document.getElementById('bunny-dropzone'));
-        r.assignBrowse(document.getElementById('bunny-browse'), false, false);
-
-        r.on('fileAdded', async (file) => {
-            try{
-                const res=await fetch(URL_START,{method:'POST',
-                    headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'},
-                    body:JSON.stringify({filename:file.fileName||file.file.name, size:file.size, identifier:file.uniqueIdentifier})});
-                const data=await res.json();
-                if(!res.ok){ alert(data.error||'Démarrage impossible.'); r.removeFile(file); return; }
-                file.uploadId=data.upload_id;
-                progressRow({id:data.upload_id,title:file.fileName,status:'uploading',progress:0,size_bytes:file.size});
-                r.upload();
-            }catch(e){ alert('Erreur réseau au démarrage.'); r.removeFile(file); }
-        });
-        r.on('fileProgress', (file)=>{ if(file.uploadId) progressRow({id:file.uploadId,title:file.fileName,status:'uploading',progress:Math.floor(file.progress()*100),size_bytes:file.size}); });
-        r.on('fileSuccess', (file)=>{ const el=document.getElementById('act-'+file.uploadId); if(el) el.remove(); scheduleReload(); });
-        r.on('fileError', (file)=>{ if(file.uploadId){ const el=document.getElementById('act-'+file.uploadId); if(el) el.querySelector('div:last-child').textContent='Échec de la réception.'; } });
-    }
+    window.addEventListener('abbev:upload-status', (e)=>{
+        const data=e.detail.data||[];
+        const seen=new Set();
+        data.forEach(d=>{seen.add(String(d.id)); progressRow(d); upsertRow(d);});
+        if(activeEl) Array.from(activeEl.children).forEach(c=>{const id=c.id.replace('act-',''); if(!seen.has(id)) c.remove();});
+        let finished=false;
+        prevActive.forEach(id=>{if(!seen.has(id)) finished=true;});
+        prevActive=seen;
+        if(finished) scheduleReload();
+    }, sig);
 
     /* ---------- Relancer ---------- */
     async function retryUpload(id){
         try{
             const r=await fetch(`${URL_BASE}/${id}/retry`,{method:'POST',headers:{'X-CSRF-TOKEN':CSRF,'Accept':'application/json'}});
             const d=await r.json();
-            if(!r.ok){ alert(d.error||'Relance impossible.'); return; }
-            ensurePolling(); scheduleReload();
-        }catch(e){ alert('Erreur réseau à la relance.'); }
+            if(!r.ok){alert(d.error||'Relance impossible.');return;}
+            if(engine) engine.ensurePolling();
+            scheduleReload();
+        }catch(e){alert('Erreur réseau à la relance.');}
     }
-    document.addEventListener('click',(e)=>{ const b=e.target.closest('[data-retry-row]'); if(b) retryUpload(b.dataset.retryRow); });
+    document.addEventListener('click',(e)=>{const b=e.target.closest('[data-retry-row]'); if(b) retryUpload(b.dataset.retryRow);}, sig);
 
-    /* ---------- Suppression via modale personnalisée ---------- */
+    /* ---------- Suppression (modale) ---------- */
     const modal=document.getElementById('bunny-del-modal');
     const delCountEl=document.getElementById('bunny-del-count');
     const delConfirm=document.getElementById('bunny-del-confirm');
@@ -410,38 +400,36 @@
     function openDelModal(ids){
         if(!ids.length) return;
         pendingIds=ids;
-        if(delCountEl) delCountEl.textContent = ids.length>1 ? `ces ${ids.length} vidéos` : 'cette vidéo';
-        if(delConfirm){ delConfirm.disabled=false; delConfirm.innerHTML='<i class="fas fa-trash mr-1.5"></i>Supprimer'; }
+        if(delCountEl) delCountEl.textContent=ids.length>1?`ces ${ids.length} vidéos`:'cette vidéo';
+        if(delConfirm){delConfirm.disabled=false; delConfirm.innerHTML='<i class="fas fa-trash mr-1.5"></i>Supprimer';}
         modal.classList.remove('hidden'); modal.classList.add('flex');
     }
-    function closeDelModal(){ if(!modal) return; modal.classList.add('hidden'); modal.classList.remove('flex'); pendingIds=[]; }
+    function closeDelModal(){if(!modal) return; modal.classList.add('hidden'); modal.classList.remove('flex'); pendingIds=[];}
     if(modal){
-        modal.querySelectorAll('[data-modal-close]').forEach(el=>el.addEventListener('click', closeDelModal));
-        document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && !modal.classList.contains('hidden')) closeDelModal(); });
+        modal.querySelectorAll('[data-modal-close]').forEach(el=>el.addEventListener('click',closeDelModal,sig));
+        document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&!modal.classList.contains('hidden')) closeDelModal();},sig);
     }
 
     async function deleteIds(ids){
-        const r=await fetch(URL_BULK,{method:'POST',
-            headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'},
-            body:JSON.stringify({ids})});
-        return r.ok ? r.json() : Promise.reject(await r.json().catch(()=>({})));
+        const r=await fetch(URL_BULK,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'},body:JSON.stringify({ids})});
+        return r.ok?r.json():Promise.reject(await r.json().catch(()=>({})));
     }
     function afterDelete(d){
-        if(d.skipped && d.skipped.length){
-            const lines = d.skipped.map(s=>`• ${s.title} — ${s.reason||'rattachée à un film/épisode'}`).join('\n');
-            sessionStorage.setItem('bunny-del-msg', `${d.deleted} supprimée(s).\nNon supprimée(s) :\n${lines}`);
+        closeDelModal();
+        if(d.skipped&&d.skipped.length){
+            alert(`${d.deleted} supprimée(s).\nNon supprimée(s) :\n`+d.skipped.map(s=>`• ${s.title} — ${s.reason}`).join('\n'));
         }
-        window.location.reload();
+        if(window.ABBEV&&ABBEV.navigate) ABBEV.navigate(location.href);
+        else location.reload();
     }
-    if(delConfirm) delConfirm.addEventListener('click', async ()=>{
+    if(delConfirm) delConfirm.addEventListener('click',async()=>{
         if(!pendingIds.length) return;
         delConfirm.disabled=true; delConfirm.innerHTML='<i class="fas fa-spinner fa-spin mr-1.5"></i>Suppression…';
-        try{ afterDelete(await deleteIds(pendingIds)); }
-        catch(d){ closeDelModal(); alert(d.message||'Suppression impossible.'); }
-    });
+        try{afterDelete(await deleteIds(pendingIds));}
+        catch(d){closeDelModal(); alert(d.message||'Suppression impossible.');}
+    },sig);
 
-    // Suppression par ligne → ouvre la modale.
-    document.addEventListener('click',(e)=>{ const b=e.target.closest('[data-del-row]'); if(b) openDelModal([Number(b.dataset.delRow)]); });
+    document.addEventListener('click',(e)=>{const b=e.target.closest('[data-del-row]'); if(b) openDelModal([Number(b.dataset.delRow)]);},sig);
 
     /* ---------- Sélection multiple ---------- */
     const checkAll=document.getElementById('bunny-check-all');
@@ -453,24 +441,32 @@
         const n=selectedIds().length;
         if(delBtn) delBtn.disabled=n===0;
         if(selCount) selCount.textContent=n?`${n} sélectionnée(s)`:'';
-        if(checkAll){ const all=rowChecks(); checkAll.checked=all.length>0&&all.every(c=>c.checked); checkAll.indeterminate=all.some(c=>c.checked)&&!checkAll.checked; }
+        if(checkAll){const all=rowChecks(); checkAll.checked=all.length>0&&all.every(c=>c.checked); checkAll.indeterminate=all.some(c=>c.checked)&&!checkAll.checked;}
     }
-    if(checkAll) checkAll.addEventListener('change',()=>{ rowChecks().forEach(c=>{ c.checked=checkAll.checked; }); refreshSel(); });
-    document.addEventListener('change',(e)=>{ if(e.target.classList.contains('bunny-row-check')) refreshSel(); });
-    if(delBtn) delBtn.addEventListener('click', ()=> openDelModal(selectedIds()));
+    if(checkAll) checkAll.addEventListener('change',()=>{rowChecks().forEach(c=>{c.checked=checkAll.checked;}); refreshSel();},sig);
+    document.addEventListener('change',(e)=>{if(e.target.classList.contains('bunny-row-check')) refreshSel();},sig);
+    if(delBtn) delBtn.addEventListener('click',()=>openDelModal(selectedIds()),sig);
 
-    /* ---------- Recherche serveur : auto-submit débauncé ---------- */
+    /* ---------- Recherche (PJAX-aware) ---------- */
     const fForm=document.getElementById('bunny-filter-form');
     const fSearch=fForm?.querySelector('input[name="q"]');
     let sT=null;
-    if(fSearch) fSearch.addEventListener('input', ()=>{ clearTimeout(sT); sT=setTimeout(()=>fForm.submit(), 600); });
+    if(fSearch) fSearch.addEventListener('input',()=>{
+        clearTimeout(sT);
+        sT=setTimeout(()=>{
+            if(window.ABBEV&&ABBEV.navigate){
+                const u=new URL(fForm.action,location.origin);
+                new FormData(fForm).forEach((v,k)=>{if(v)u.searchParams.set(k,v);else u.searchParams.delete(k);});
+                ABBEV.navigate(u.href);
+            } else fForm.submit();
+        },600);
+    },sig);
 
-    // Message après rechargement (suppressions ignorées).
+    // Flash après suppression
     const delMsg=sessionStorage.getItem('bunny-del-msg');
-    if(delMsg){ sessionStorage.removeItem('bunny-del-msg'); setTimeout(()=>alert(delMsg), 150); }
+    if(delMsg){sessionStorage.removeItem('bunny-del-msg'); setTimeout(()=>alert(delMsg),150);}
 
     refreshSel();
-    ensurePolling();
 })();
 </script>
 @endpush

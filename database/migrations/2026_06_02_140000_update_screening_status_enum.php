@@ -63,6 +63,10 @@ return new class extends Migration
             Schema::table('screenings', function ($table) {
                 $table->renameColumn('status_new', 'status');
             });
+        } elseif ($driver === 'pgsql') {
+            DB::table('screenings')->whereIn('status', ['scheduled', 'sent'])->update(['status' => 'published']);
+            DB::statement("ALTER TABLE screenings DROP CONSTRAINT IF EXISTS screenings_status_check");
+            DB::statement("ALTER TABLE screenings ADD CONSTRAINT screenings_status_check CHECK (status::text = ANY (ARRAY['draft','published','canceled']::text[]))");
         } else {
             DB::table('screenings')->whereIn('status', ['scheduled', 'sent'])->update(['status' => 'published']);
             DB::statement("ALTER TABLE screenings MODIFY status ENUM('draft','published','canceled') NOT NULL DEFAULT 'draft'");

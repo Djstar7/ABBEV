@@ -49,11 +49,18 @@ class BunnyUploadController extends Controller
 
         $uploads = $query->paginate(12)->withQueryString();
 
+        // Uploads bloqués en Phase 1 (aucun chunk reçu depuis 2 min)
+        $stalledIds = BunnyUpload::where('status', 'uploading')
+            ->where('updated_at', '<', now()->subMinutes(2))
+            ->pluck('id')
+            ->all();
+
         return view('admin.bunny.uploads', [
             'uploads'    => $uploads,
             'configured' => $this->bunny->isConfigured(),
             'q'          => $q,
             'status'     => $status,
+            'stalledIds' => $stalledIds,
         ]);
     }
 

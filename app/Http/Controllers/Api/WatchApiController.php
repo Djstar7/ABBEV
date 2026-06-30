@@ -173,9 +173,19 @@ class WatchApiController extends Controller
      */
     private function resolveUrls(Media|Episode $model): array
     {
+        // Vidéo locale : toujours servie directement, même en mode test
+        // (le mode test ne remplace que les vidéos Bunny par un échantillon).
+        if ($model->video_provider === 'local' && $model->video_path) {
+            return [
+                'videoUrl' => asset('storage/' . ltrim($model->video_path, '/')),
+                'embedUrl' => null,
+                'videoProvider' => 'local',
+            ];
+        }
+
         // Mode test/dev : on sert la même vidéo d'échantillon publique pour
-        // tout le catalogue, sans toucher Bunny (cf. /admin/configuration →
-        // « Mode Vidéo »). Permet de présenter le catalogue sans quota Bunny.
+        // les vidéos Bunny, sans toucher au quota (cf. /admin/configuration →
+        // « Mode Vidéo »). Les vidéos locales ci-dessus sont exclues.
         if ($this->isTestMode()) {
             return [
                 'videoUrl' => $this->sampleHls(),
@@ -195,9 +205,7 @@ class WatchApiController extends Controller
         }
 
         return [
-            'videoUrl' => $model->video_path
-                ? asset('storage/' . ltrim($model->video_path, '/'))
-                : null,
+            'videoUrl' => null,
             'embedUrl' => null,
             'videoProvider' => $model->video_provider,
         ];
@@ -246,6 +254,31 @@ class WatchApiController extends Controller
         string $type,
         string $label,
     ): JsonResponse {
+        // Vidéo locale : téléchargement direct depuis le serveur.
+        if ($model->video_provider === 'local' && $model->video_path) {
+            $localUrl   = asset('storage/' . ltrim($model->video_path, '/'));
+            $localFile  = public_path('storage/' . ltrim($model->video_path, '/'));
+            $sizeBytes  = is_file($localFile) ? filesize($localFile) : null;
+
+            Log::info('[Download] ✓ local file served', [
+                'user_id'    => $request->user()->id,
+                'type'       => $type,
+                'id'         => $model->id,
+                'size_bytes' => $sizeBytes,
+            ]);
+
+            return response()->json([
+                'data' => [
+                    'downloadUrl' => $localUrl,
+                    'expiresAt'   => null,
+                    'sizeBytes'   => $sizeBytes,
+                    'contentType' => 'video/mp4',
+                    'height'      => null,
+                    'filename'    => $this->safeFilename($label) . '.' . pathinfo($model->video_path, PATHINFO_EXTENSION),
+                ],
+            ]);
+        }
+
         // Mode test/dev : on renvoie directement l'URL MP4 d'échantillon
         // publique (pas de signature, pas de HEAD Bunny). Le HEAD reste
         // best-effort pour récupérer la taille si possible.

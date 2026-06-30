@@ -33,6 +33,13 @@ return new class extends Migration
             return;
         }
 
+        if ($driver === 'pgsql') {
+            DB::statement("ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_payment_method_check");
+            DB::statement("ALTER TABLE transactions ADD CONSTRAINT transactions_payment_method_check CHECK (payment_method::text = ANY (ARRAY['cash','card','mobile','paypal','freemopay','fedapay','kpay','apple_iap']::text[]))");
+
+            return;
+        }
+
         DB::statement("ALTER TABLE transactions MODIFY payment_method ENUM('cash','card','mobile','paypal','freemopay','fedapay','kpay','apple_iap') NOT NULL DEFAULT 'mobile'");
     }
 
@@ -49,6 +56,13 @@ return new class extends Migration
                 'payment_method' => ['cash', 'card', 'mobile', 'paypal', 'freemopay', 'fedapay', 'kpay'],
                 'type'           => ['subscription', 'purchase', 'refund', 'withdrawal'],
             ]);
+
+            return;
+        }
+
+        if ($driver === 'pgsql') {
+            DB::statement("ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_payment_method_check");
+            DB::statement("ALTER TABLE transactions ADD CONSTRAINT transactions_payment_method_check CHECK (payment_method::text = ANY (ARRAY['cash','card','mobile','paypal','freemopay','fedapay','kpay']::text[]))");
 
             return;
         }
