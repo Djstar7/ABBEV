@@ -155,7 +155,7 @@ class MediaController extends Controller
             ]);
         }
 
-        $data = $this->mediaPayload($request, $validated);
+        $data = $this->mediaPayload($request, $validated, $medium);
 
         foreach (['thumbnail', 'cover', 'banner'] as $imgField) {
             if ($request->hasFile($imgField)) {
@@ -193,13 +193,32 @@ class MediaController extends Controller
      * --------------------------------------------------------------- */
 
     /**
+     * Génère un slug unique à partir du titre (suffixe -2, -3… si déjà pris).
+     */
+    protected function uniqueSlug(string $title, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($title) ?: 'media';
+        $slug = $base;
+        $i = 2;
+        while (
+            Media::where('slug', $slug)
+                ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $slug = $base.'-'.$i++;
+        }
+
+        return $slug;
+    }
+
+    /**
      * Construit le payload à enregistrer (transformation des champs Bunny + slug + duration).
      */
-    protected function mediaPayload(Request $request, array $validated): array
+    protected function mediaPayload(Request $request, array $validated, ?Media $ignore = null): array
     {
         $data = $validated;
 
-        $data['slug']        = Str::slug($validated['title']);
+        $data['slug']        = $this->uniqueSlug($validated['title'], $ignore?->id);
         $data['is_featured'] = (bool) $request->boolean('is_featured');
 
         // Conversion durée (minutes → secondes) — pour les films seulement.
@@ -209,16 +228,27 @@ class MediaController extends Controller
             $data['duration'] = (int) $data['duration'] * 60;
         }
 
-        // Référence Bunny
-        if (! empty($validated['bunny_video_id'])) {
+        // Référence vidéo : Bunny, ou fallback LOCAL (guid "local:{id}") pour tester sans Bunny.
+        $sel = $validated['bunny_video_id'] ?? null;
+
+        if ($sel && str_starts_with($sel, 'local:')) {
+            // Vidéo locale publiée depuis la page Upload (video_provider = 'local').
+            $upload = \App\Models\BunnyUpload::find((int) substr($sel, 6));
+            $data['video_provider']   = 'local';
+            $data['video_path']       = $upload?->local_path;
+            $data['video_id']         = null;
+            $data['video_library_id'] = null;
+            $data['video_metadata']   = null;
+        } elseif (! empty($sel)) {
             $data['video_provider']   = 'bunny';
-            $data['video_id']         = $validated['bunny_video_id'];
+            $data['video_id']         = $sel;
+            $data['video_path']       = null;
             $data['video_library_id'] = (string) config('services.bunny.library_id');
 
             // Essayer de récupérer la durée et le titre Bunny si pas fournis
             try {
                 if ($this->bunny->isConfigured()) {
-                    $bv = $this->bunny->getVideo($validated['bunny_video_id']);
+                    $bv = $this->bunny->getVideo($sel);
                     $data['video_metadata'] = $bv;
                     if (empty($data['duration']) && ! empty($bv['length'])) {
                         $data['duration'] = (int) $bv['length']; // déjà en secondes
@@ -231,6 +261,7 @@ class MediaController extends Controller
             // Série sans vidéo directe (les épisodes auront chacun leur video_id)
             $data['video_provider']   = null;
             $data['video_id']         = null;
+            $data['video_path']       = null;
             $data['video_library_id'] = null;
         }
 

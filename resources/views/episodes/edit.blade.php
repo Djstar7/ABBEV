@@ -8,6 +8,13 @@
     $bunny = app(\App\Services\BunnyStreamService::class);
     $bunnyThumb = ($episode->video_provider === 'bunny' && $episode->video_id && $bunny->isConfigured())
         ? $bunny->thumbnailUrl($episode->video_id) : null;
+
+    // Jeton de la vidéo actuelle pour pré-sélectionner le picker (Bunny ou locale).
+    $currentVideoToken = $episode->video_id;
+    if ($episode->video_provider === 'local' && $episode->video_path) {
+        $lu = \App\Models\BunnyUpload::where('local_path', $episode->video_path)->first();
+        $currentVideoToken = $lu ? 'local:' . $lu->id : null;
+    }
 @endphp
 
 <div class="max-w-4xl mx-auto">
@@ -35,7 +42,7 @@
                 Vidéo Bunny <span class="text-red-400 text-sm">*</span>
             </h3>
 
-            <div x-data="bunnyPicker({{ json_encode($episode->video_id ?? '') }})" x-init="init()">
+            <div x-data="bunnyPicker({{ json_encode($currentVideoToken ?? '') }})" x-init="init()">
                 <input type="hidden" name="bunny_video_id" :value="selected?.guid || ''">
 
                 <template x-if="selected">
@@ -52,12 +59,12 @@
                 </template>
 
                 <input x-show="!selected" type="text" x-model="query" @input.debounce.300ms="refresh()"
-                       placeholder="🔍 Rechercher une vidéo Bunny disponible…"
+                       placeholder="🔍 Rechercher par nom — vidéos Bunny et locales…"
                        class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-3 text-white" />
 
                 <div x-show="!selected" class="mt-2 max-h-72 overflow-y-auto bg-dark-50 border border-dark-200 rounded-lg divide-y divide-dark-200">
                     <template x-if="loading"><div class="p-4 text-gray-400 text-sm text-center"><i class="fas fa-spinner fa-spin mr-2"></i>Chargement…</div></template>
-                    <template x-if="!loading && results.length === 0"><div class="p-4 text-gray-500 text-sm text-center">Aucune vidéo libre.</div></template>
+                    <template x-if="!loading && results.length === 0"><div class="p-4 text-gray-500 text-sm text-center">Aucune vidéo libre. <a href="{{ route('admin.bunny.uploads.index') }}" class="text-primary-300 underline">Uploader une vidéo</a>.</div></template>
                     <template x-for="v in results" :key="v.guid">
                         <button type="button" @click="selected = v" class="w-full text-left flex items-center gap-3 p-3 hover:bg-dark-200/50">
                             <img :src="v.thumb" class="w-20 h-12 rounded object-cover bg-dark-300 flex-shrink-0" onerror="this.style.opacity=.2">

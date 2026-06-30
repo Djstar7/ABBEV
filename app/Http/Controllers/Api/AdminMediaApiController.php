@@ -49,7 +49,7 @@ class AdminMediaApiController extends Controller
             'published_at' => 'nullable|date',
         ]);
 
-        $data['slug'] = Str::slug($data['title']);
+        $data['slug'] = $this->uniqueSlug($data['title']);
         if (isset($data['duration'])) {
             $data['duration'] = $data['duration'] * 60;
         }
@@ -84,7 +84,7 @@ class AdminMediaApiController extends Controller
         ]);
 
         if (isset($data['title'])) {
-            $data['slug'] = Str::slug($data['title']);
+            $data['slug'] = $this->uniqueSlug($data['title'], $media->id);
         }
         if (isset($data['duration'])) {
             $data['duration'] = $data['duration'] * 60;
@@ -112,5 +112,22 @@ class AdminMediaApiController extends Controller
         $media->delete();
 
         return response()->json(['message' => 'Média supprimé.']);
+    }
+
+    /** Slug unique (suffixe -2, -3… si déjà pris). */
+    protected function uniqueSlug(string $title, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($title) ?: 'media';
+        $slug = $base;
+        $i = 2;
+        while (
+            Media::where('slug', $slug)
+                ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $slug = $base.'-'.$i++;
+        }
+
+        return $slug;
     }
 }

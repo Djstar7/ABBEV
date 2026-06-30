@@ -107,7 +107,7 @@
 
                         <!-- Champ de recherche -->
                         <input x-show="!selected" type="text" x-model="query" @input.debounce.300ms="refresh()"
-                               placeholder="🔍 Rechercher une vidéo Bunny disponible…"
+                               placeholder="🔍 Rechercher par nom — vidéos Bunny et locales…"
                                class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20" />
 
                         <!-- Liste résultats -->
@@ -119,8 +119,8 @@
                             </template>
                             <template x-if="!loading && results.length === 0">
                                 <div class="p-4 text-gray-500 text-sm text-center">
-                                    Aucune vidéo libre. Upload-en sur
-                                    <a href="https://dash.bunny.net/stream/{{ config('services.bunny.library_id') }}/library/overview" target="_blank" class="text-primary-300 underline">Bunny</a>.
+                                    Aucune vidéo libre.
+                                    <a href="{{ route('admin.bunny.uploads.index') }}" class="text-primary-300 underline">Uploader une vidéo</a>.
                                 </div>
                             </template>
                             <template x-for="v in results" :key="v.guid">
