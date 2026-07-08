@@ -68,24 +68,21 @@ class ConfigurationController extends Controller
                 ->with('active_tab', 'kpay');
         }
 
-        // Tentative d'init avec un montant minimal pour valider les credentials.
-        // On utilise un externalId unique jetable.
-        $result = $kpay->initPayment([
-            'amount'        => 100,
-            'provider'      => 'MTN_MOMO_CMR',
-            'phoneNumber'   => '237653456789',
-            'externalId'    => 'test-connectivity-' . time(),
-            'description'   => 'Test de connectivité ABBEV',
-        ]);
+        // On vérifie les credentials en récupérant un paiement fictif.
+        // Credentials valides → 404 (not found), invalides → 401.
+        // Aucun effet de bord (pas de vrai paiement initié).
+        $result = $kpay->getPayment('test-connectivity-' . time());
 
-        if ($result['success']) {
+        $http = $result['http'] ?? null;
+
+        // 2xx ou 404 = credentials acceptés (le paiement fictif n'existe pas, c'est normal)
+        if ($result['success'] || $http === 404) {
             return back()
                 ->with('success', 'Connexion KPay réussie ! Les credentials sont valides.')
                 ->with('active_tab', 'kpay');
         }
 
         $message = $result['message'] ?? 'Erreur inconnue';
-        $http = $result['http'] ?? null;
 
         return back()
             ->with('error', "Échec de connexion KPay (HTTP {$http}) : {$message}")
