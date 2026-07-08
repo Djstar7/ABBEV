@@ -198,7 +198,7 @@ class SubscriptionPaymentController extends Controller
                 // Initier paiement KPay (Mobile Money — USSD)
                 $result = $this->kpayService->initPayment([
                     'amount' => (int) $plan->price,
-                    'paymentMethod' => $validated['mobile_operator'],
+                    'provider' => $validated['mobile_operator'],
                     'phoneNumber' => $validated['phone_number'],
                     'externalId' => $transaction->transaction_id,
                 ]);

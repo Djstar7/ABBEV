@@ -71,9 +71,9 @@ class ConfigurationController extends Controller
         // Tentative d'init avec un montant minimal pour valider les credentials.
         // On utilise un externalId unique jetable.
         $result = $kpay->initPayment([
-            'amount'        => 1,
-            'paymentMethod' => 'MOBILE_MONEY',
-            'phoneNumber'   => '237600000000',
+            'amount'        => 100,
+            'provider'      => 'MTN_MOMO_CMR',
+            'phoneNumber'   => '237653456789',
             'externalId'    => 'test-connectivity-' . time(),
             'description'   => 'Test de connectivité ABBEV',
         ]);

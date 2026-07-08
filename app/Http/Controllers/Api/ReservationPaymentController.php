@@ -194,7 +194,7 @@ class ReservationPaymentController extends Controller
     {
         $result = $this->kpay->initPayment([
             'amount'        => (int) $transaction->amount,
-            'paymentMethod' => $validated['mobile_operator'],
+            'provider'      => $validated['mobile_operator'],
             'phoneNumber'   => $validated['phone_number'],
             'externalId'    => $transaction->transaction_id,
         ]);

@@ -33,17 +33,30 @@ class KpayService
     }
 
     /**
+     * Mappe un code opérateur interne vers le code provider KPay.
+     */
+    private const PROVIDER_MAP = [
+        'MTN_MONEY'    => 'MTN_MOMO_CMR',
+        'ORANGE_MONEY' => 'ORANGE_CMR',
+    ];
+
+    /**
      * POST /api/v1/payments/init — mode USSD.
      *
-     * @param array{amount:int|float, paymentMethod:string, phoneNumber:string, externalId:string, description?:string, customerName?:string, customerEmail?:string, metadata?:array} $params
+     * @param array{amount:int|float, phoneNumber:string, externalId:string, provider?:string, description?:string, customerName?:string, customerEmail?:string, metadata?:array} $params
      * @return array{success:bool, data?:array, message?:string, http?:int|null, body?:array|null}
      */
     public function initPayment(array $params): array
     {
+        // Mapper l'opérateur interne vers le code provider KPay si nécessaire
+        if (isset($params['provider']) && isset(self::PROVIDER_MAP[$params['provider']])) {
+            $params['provider'] = self::PROVIDER_MAP[$params['provider']];
+        }
+
         Log::info('[KpayService] Init payment', [
             'externalId' => $params['externalId'] ?? null,
             'amount' => $params['amount'] ?? null,
-            'method' => $params['paymentMethod'] ?? null,
+            'provider' => $params['provider'] ?? null,
         ]);
 
         return $this->request('POST', '/api/v1/payments/init', $params);
