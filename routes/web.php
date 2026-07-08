@@ -112,6 +112,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
 
     Route::get('/configuration', [App\Http\Controllers\ConfigurationController::class, 'index'])->name('configuration.index');
     Route::post('/configuration', [App\Http\Controllers\ConfigurationController::class, 'update'])->name('configuration.update');
+    Route::post('/configuration/kpay/test', [App\Http\Controllers\ConfigurationController::class, 'testKpay'])->name('configuration.testKpay');
     Route::post('/configuration/{group}', [App\Http\Controllers\ConfigurationController::class, 'updateGroup'])->name('configuration.updateGroup');
 
     // Bunny Library complète (toutes les vidéos) — admin only

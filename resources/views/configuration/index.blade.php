@@ -18,6 +18,33 @@
     </div>
 </div>
 
+{{-- KPay test form (hidden) --}}
+<form id="kpay-test-form" action="{{ route('configuration.testKpay') }}" method="POST" class="hidden">@csrf</form>
+
+@if(session('error'))
+<div class="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+    <div class="flex items-start">
+        <i class="fas fa-times-circle text-red-400 text-xl mr-3 mt-1"></i>
+        <div>
+            <p class="text-red-300 font-medium mb-1">Erreur</p>
+            <p class="text-red-200 text-sm">{{ session('error') }}</p>
+        </div>
+    </div>
+</div>
+@endif
+
+@if(session('success'))
+<div class="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+    <div class="flex items-start">
+        <i class="fas fa-check-circle text-green-400 text-xl mr-3 mt-1"></i>
+        <div>
+            <p class="text-green-300 font-medium mb-1">Succès</p>
+            <p class="text-green-200 text-sm">{{ session('success') }}</p>
+        </div>
+    </div>
+</div>
+@endif
+
 @php
     $groupMeta = [
         'general'       => ['icon' => 'fas fa-cog',          'color' => 'text-primary-400', 'label' => 'Général'],
@@ -192,6 +219,13 @@
                             class="flex-1 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition">
                         <i class="fas fa-save mr-2"></i> Enregistrer « {{ $meta['label'] }} »
                     </button>
+                    @if($group === 'kpay')
+                    <button type="button"
+                            onclick="document.getElementById('kpay-test-form').submit()"
+                            class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg transition">
+                        <i class="fas fa-plug mr-2"></i> Tester la connexion
+                    </button>
+                    @endif
                     <button type="button"
                             @click="window.location.reload()"
                             class="bg-dark-200 hover:bg-dark-300 text-white px-6 py-3 rounded-lg transition">

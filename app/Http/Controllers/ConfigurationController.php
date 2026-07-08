@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Configuration;
+use App\Services\KpayService;
 use Illuminate\Http\Request;
 
 class ConfigurationController extends Controller
@@ -54,5 +55,40 @@ class ConfigurationController extends Controller
         return back()
             ->with('success', "Configuration « {$group} » mise à jour ({$updated} paramètre(s)).")
             ->with('active_tab', $group);
+    }
+
+    /**
+     * Teste la connectivité avec l'API KPay en vérifiant les credentials.
+     */
+    public function testKpay(KpayService $kpay)
+    {
+        if (!$kpay->isConfigured()) {
+            return back()
+                ->with('error', 'KPay non configuré : veuillez renseigner l\'URL, l\'API Key et la Secret Key.')
+                ->with('active_tab', 'kpay');
+        }
+
+        // Tentative d'init avec un montant minimal pour valider les credentials.
+        // On utilise un externalId unique jetable.
+        $result = $kpay->initPayment([
+            'amount'        => 1,
+            'paymentMethod' => 'MOBILE_MONEY',
+            'phoneNumber'   => '237600000000',
+            'externalId'    => 'test-connectivity-' . time(),
+            'description'   => 'Test de connectivité ABBEV',
+        ]);
+
+        if ($result['success']) {
+            return back()
+                ->with('success', 'Connexion KPay réussie ! Les credentials sont valides.')
+                ->with('active_tab', 'kpay');
+        }
+
+        $message = $result['message'] ?? 'Erreur inconnue';
+        $http = $result['http'] ?? null;
+
+        return back()
+            ->with('error', "Échec de connexion KPay (HTTP {$http}) : {$message}")
+            ->with('active_tab', 'kpay');
     }
 }
