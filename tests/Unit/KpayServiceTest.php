@@ -41,6 +41,34 @@ class KpayServiceTest extends TestCase
         $this->assertSame($expected, KpayService::normalizeMsisdn($input));
     }
 
+    public function test_extract_error_message_privilegie_message_sur_error(): void
+    {
+        // Enveloppe réelle KPay : `error` générique, `message` exploitable.
+        $decoded = [
+            'statusCode' => 400,
+            'error' => 'Bad Request',
+            'code' => 'BAD_REQUEST',
+            'message' => 'Le montant minimum autorisé pour un paiement est de 100 XAF',
+            'path' => '/api/v1/payments/init',
+        ];
+
+        $this->assertSame(
+            'Le montant minimum autorisé pour un paiement est de 100 XAF',
+            KpayService::extractErrorMessage($decoded),
+        );
+    }
+
+    public function test_extract_error_message_replis(): void
+    {
+        // Pas de `message` → on retombe sur `error`.
+        $this->assertSame('Unauthorized', KpayService::extractErrorMessage([
+            'error' => 'Unauthorized',
+        ]));
+        // Corps non exploitable → libellé générique.
+        $this->assertSame('KPay error', KpayService::extractErrorMessage(null));
+        $this->assertSame('KPay error', KpayService::extractErrorMessage('<html>'));
+    }
+
     public static function msisdnProvider(): array
     {
         return [

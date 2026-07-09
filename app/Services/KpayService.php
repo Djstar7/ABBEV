@@ -71,6 +71,30 @@ class KpayService
     }
 
     /**
+     * Extrait le message d'erreur le plus utile d'une réponse KPay décodée.
+     *
+     * KPay renvoie l'enveloppe `{ statusCode, error, code, message, ... }` où
+     * `error` est le texte générique du statut HTTP (« Bad Request ») et
+     * `message` le détail humain exploitable (« Le montant minimum autorisé
+     * pour un paiement est de 100 XAF »). On privilégie donc `message`, puis
+     * `error` en repli — c'est CE message qui est affiché à l'utilisateur.
+     *
+     * @param mixed $decoded corps JSON décodé de la réponse KPay
+     */
+    public static function extractErrorMessage($decoded): string
+    {
+        $message = 'KPay error';
+        if (is_array($decoded)) {
+            $message = $decoded['message'] ?? $decoded['error'] ?? 'KPay error';
+        }
+        if (is_array($message)) {
+            $message = implode(', ', array_map('strval', $message));
+        }
+
+        return (string) $message;
+    }
+
+    /**
      * POST /api/v1/payments/init — mode USSD.
      *
      * @param array{amount:int|float, phoneNumber:string, externalId:string, provider?:string, description?:string, customerName?:string, customerEmail?:string, metadata?:array} $params
@@ -227,10 +251,7 @@ class KpayService
             ];
         }
 
-        $message = is_array($decoded) ? ($decoded['error'] ?? ($decoded['message'] ?? 'KPay error')) : 'KPay error';
-        if (is_array($message)) {
-            $message = implode(', ', array_map('strval', $message));
-        }
+        $message = self::extractErrorMessage($decoded);
 
         Log::error('[KpayService] HTTP error', [
             'method' => $method,
