@@ -199,7 +199,9 @@ class SubscriptionPaymentController extends Controller
                 $result = $this->kpayService->initPayment([
                     'amount' => (int) $plan->price,
                     'provider' => $validated['mobile_operator'],
-                    'phoneNumber' => $validated['phone_number'],
+                    // KPay exige le format international (2376XXXXXXXX) ; le
+                    // mobile saisit un numéro local (6XXXXXXXX) → on normalise.
+                    'phoneNumber' => KpayService::normalizeMsisdn($validated['phone_number']),
                     'externalId' => $transaction->transaction_id,
                 ]);
 

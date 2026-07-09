@@ -33,12 +33,42 @@ class KpayService
     }
 
     /**
-     * Mappe un code opérateur interne vers le code provider KPay.
+     * Mappe un code opérateur interne (envoyé par le mobile) vers le code
+     * provider EXACT attendu par KPay (qui détermine pays + devise).
+     * ABBEV opère au Cameroun (XAF) → providers CMR.
      */
     private const PROVIDER_MAP = [
         'MTN_MONEY'    => 'MTN_MOMO_CMR',
         'ORANGE_MONEY' => 'ORANGE_CMR',
     ];
+
+    /**
+     * Résout le code provider KPay à partir d'un opérateur interne. Si la
+     * valeur est déjà un code KPay (ou inconnue), on la renvoie telle quelle.
+     */
+    public function providerFor(string $operator): string
+    {
+        return self::PROVIDER_MAP[$operator] ?? $operator;
+    }
+
+    /**
+     * Normalise un numéro Mobile Money au format international attendu par
+     * KPay (ex. « 6XXXXXXXX » ou « 06XXXXXXXX » → « 2376XXXXXXXX »). Le
+     * dashboard/mobile saisit un numéro local ; KPay exige l'indicatif pays.
+     */
+    public static function normalizeMsisdn(string $phone, string $dialCode = '237'): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+        if ($digits === '') {
+            return '';
+        }
+        // Déjà en international (commence par l'indicatif) : on garde tel quel.
+        if (str_starts_with($digits, $dialCode)) {
+            return $digits;
+        }
+        // Retire un éventuel 0 de trunk national puis préfixe l'indicatif.
+        return $dialCode . ltrim($digits, '0');
+    }
 
     /**
      * POST /api/v1/payments/init — mode USSD.
@@ -48,9 +78,9 @@ class KpayService
      */
     public function initPayment(array $params): array
     {
-        // Mapper l'opérateur interne vers le code provider KPay si nécessaire
-        if (isset($params['provider']) && isset(self::PROVIDER_MAP[$params['provider']])) {
-            $params['provider'] = self::PROVIDER_MAP[$params['provider']];
+        // Mapper l'opérateur interne vers le code provider KPay si nécessaire.
+        if (isset($params['provider'])) {
+            $params['provider'] = $this->providerFor($params['provider']);
         }
 
         Log::info('[KpayService] Init payment', [
