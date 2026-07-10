@@ -2,38 +2,42 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\ConvertLocalVideoToMp4;
 use App\Models\Episode;
 use App\Models\Media;
 use App\Services\VideoTranscoder;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Storage;
 
 /**
- * Convertit en MP4 les vidéos locales EXISTANTES qui ne le sont pas encore
- * (typiquement des .webm), pour qu'elles soient lisibles sur iOS/Android et
- * téléchargeables hors-ligne. Met à jour `video_path` vers le nouveau .mp4.
+ * Met en file de conversion (file `bunny`) les vidéos locales EXISTANTES qui
+ * ne sont pas déjà en MP4 (typiquement des .webm), pour qu'elles soient
+ * lisibles sur iOS/Android et téléchargeables hors-ligne.
  *
- *   php artisan videos:transcode-local            # convertit tout
- *   php artisan videos:transcode-local --dry-run  # liste sans convertir
+ * L'encodage ffmpeg est réalisé par le worker déjà en place :
+ *   php artisan queue:work --queue=bunny --timeout=0
+ * (--timeout=0 est indispensable : un long-métrage peut être long à encoder.)
+ *
+ *   php artisan videos:transcode-local            # enfile tout
+ *   php artisan videos:transcode-local --dry-run  # liste sans rien enfiler
  *   php artisan videos:transcode-local --id=218   # un seul média (film)
  */
 class TranscodeLocalVideos extends Command
 {
     protected $signature = 'videos:transcode-local
-        {--dry-run : Liste les vidéos concernées sans rien convertir}
+        {--dry-run : Liste les vidéos concernées sans rien mettre en file}
         {--id= : Ne traiter que ce média (id de film)}';
 
-    protected $description = 'Convertit les vidéos locales non-MP4 (ex. .webm) en MP4 H.264/AAC lisible partout';
+    protected $description = 'Enfile la conversion MP4 (file bunny) des vidéos locales non-MP4 (ex. .webm)';
 
-    public function handle(VideoTranscoder $transcoder): int
+    public function handle(): int
     {
         $dryRun = (bool) $this->option('dry-run');
 
-        if (! $dryRun && ! $transcoder->isAvailable()) {
-            $this->error('ffmpeg introuvable sur ce serveur. Installez-le (ex. apt install ffmpeg) '
-                .'ou configurez FFMPEG_BIN, puis relancez.');
-
-            return self::FAILURE;
+        // Avertissement non bloquant : la conversion tourne dans le worker,
+        // potentiellement sur une autre machine, mais autant prévenir tôt.
+        if (! $dryRun && ! app(VideoTranscoder::class)->isAvailable()) {
+            $this->warn('⚠️  ffmpeg introuvable sur CETTE machine. Assurez-vous '
+                .'qu\'il est installé là où tourne le worker bunny (FFMPEG_BIN).');
         }
 
         $targets = $this->collectTargets();
@@ -44,64 +48,36 @@ class TranscodeLocalVideos extends Command
             return self::SUCCESS;
         }
 
-        $this->info($targets->count().' vidéo(s) locale(s) à convertir :');
-        $ok = 0;
-        $failed = 0;
+        $this->info($targets->count().' vidéo(s) locale(s) non-MP4 :');
+        $queued = 0;
 
         foreach ($targets as $t) {
-            /** @var Media|Episode $model */
             $model = $t['model'];
-            $label = $t['label'];
-            $path = $model->video_path;
-            $absolute = Storage::disk('public')->path($path);
-
-            $this->line("• [{$t['type']} #{$model->id}] {$label} — {$path}");
+            $this->line("• [{$t['type']} #{$model->id}] {$t['label']} — {$model->video_path}");
 
             if ($dryRun) {
                 continue;
             }
 
-            if (! is_file($absolute)) {
-                $this->warn("  ↳ fichier absent sur le disque, ignoré : {$absolute}");
-                $failed++;
-                continue;
-            }
-
-            $newAbsolute = $transcoder->toMp4($absolute);
-            if ($newAbsolute === null) {
-                $this->error('  ↳ échec de conversion (voir logs).');
-                $failed++;
-                continue;
-            }
-
-            $newRelative = 'uploads/'.basename($newAbsolute);
-            $model->update(['video_path' => $newRelative]);
-
-            // Supprime l'ancien fichier non-MP4 (le .mp4 l'a remplacé).
-            if ($newAbsolute !== $absolute && is_file($absolute)) {
-                @unlink($absolute);
-            }
-
-            $this->info("  ↳ converti → {$newRelative}");
-            $ok++;
+            ConvertLocalVideoToMp4::dispatch($t['job_type'], $model->id);
+            $queued++;
         }
 
         if ($dryRun) {
-            $this->comment('(dry-run : rien n’a été converti)');
+            $this->comment('(dry-run : rien n’a été mis en file)');
 
             return self::SUCCESS;
         }
 
         $this->newLine();
-        $this->info("Terminé : {$ok} converti(s), {$failed} échec(s).");
+        $this->info("$queued conversion(s) mise(s) en file « bunny ».");
+        $this->comment('Le worker les traite : php artisan queue:work --queue=bunny --timeout=0');
 
-        return $failed > 0 ? self::FAILURE : self::SUCCESS;
+        return self::SUCCESS;
     }
 
     /**
-     * Collecte les Media (films) et Episodes locaux dont la vidéo n'est pas MP4.
-     *
-     * @return \Illuminate\Support\Collection<int, array{type:string, model:Media|Episode, label:string}>
+     * @return \Illuminate\Support\Collection<int, array{type:string, job_type:string, model:Media|Episode, label:string}>
      */
     private function collectTargets()
     {
@@ -118,7 +94,12 @@ class TranscodeLocalVideos extends Command
 
         foreach ($mediaQuery->get() as $m) {
             if (VideoTranscoder::needsTranscode($m->video_path)) {
-                $targets->push(['type' => 'film', 'model' => $m, 'label' => $m->title]);
+                $targets->push([
+                    'type' => 'film',
+                    'job_type' => 'movie',
+                    'model' => $m,
+                    'label' => $m->title,
+                ]);
             }
         }
 
@@ -130,7 +111,12 @@ class TranscodeLocalVideos extends Command
                 ->get();
             foreach ($episodes as $e) {
                 if (VideoTranscoder::needsTranscode($e->video_path)) {
-                    $targets->push(['type' => 'épisode', 'model' => $e, 'label' => $e->title ?? ('#'.$e->id)]);
+                    $targets->push([
+                        'type' => 'épisode',
+                        'job_type' => 'episode',
+                        'model' => $e,
+                        'label' => $e->title ?? ('#'.$e->id),
+                    ]);
                 }
             }
         }
