@@ -289,6 +289,21 @@ class DispatchTransferToBunny implements ShouldQueue
 
         File::deleteDirectory($chunkDir);
 
+        // Conversion en MP4 (H.264/AAC) si le fichier n'est pas déjà lisible
+        // partout : une vidéo .webm ne se lit ni sur iOS ni sur Safari, en
+        // streaming comme en téléchargement. On garde le .mp4 comme copie
+        // locale de référence. Dégrade proprement si ffmpeg est absent (on
+        // conserve alors le fichier d'origine).
+        if (\App\Services\VideoTranscoder::needsTranscode($absolutePath)) {
+            $mp4 = app(\App\Services\VideoTranscoder::class)->toMp4($absolutePath);
+            if ($mp4 !== null && $mp4 !== $absolutePath) {
+                @unlink($absolutePath); // on remplace l'original non-MP4
+                $absolutePath = $mp4;
+                $name = basename($mp4);
+                $relativePath = 'uploads/' . $name;
+            }
+        }
+
         $upload->update([
             'temp_path'      => $absolutePath,
             'local_path'     => $relativePath,

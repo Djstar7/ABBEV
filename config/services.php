@@ -89,4 +89,17 @@ return [
         'sandbox'     => (bool) env('APPLE_IAP_SANDBOX', true),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | ffmpeg (transcodage des vidéos locales vers MP4 H.264/AAC)
+    |--------------------------------------------------------------------------
+    | Les vidéos uploadées en .webm (ou autre) sont converties en .mp4 pour
+    | une lecture universelle sur mobile (iOS/Android) et hors-ligne.
+    | Requiert le binaire ffmpeg installé sur le serveur.
+    */
+    'ffmpeg' => [
+        'bin'     => env('FFMPEG_BIN', 'ffmpeg'),
+        'timeout' => (int) env('FFMPEG_TIMEOUT', 7200),
+    ],
+
 ];
