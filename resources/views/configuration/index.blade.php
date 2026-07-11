@@ -21,6 +21,9 @@
 {{-- KPay test form (hidden) --}}
 <form id="kpay-test-form" action="{{ route('configuration.testKpay') }}" method="POST" class="hidden">@csrf</form>
 
+{{-- Email test form (hidden) : envoie un email de test à l'admin connecté --}}
+<form id="mail-test-form" action="{{ route('configuration.testMail') }}" method="POST" class="hidden">@csrf</form>
+
 @if(session('error'))
 <div class="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
     <div class="flex items-start">
@@ -60,6 +63,7 @@
         'nexah_sms'     => ['icon' => 'fas fa-sms',          'color' => 'text-purple-400',  'label' => 'Nexah SMS'],
         'whatsapp'      => ['icon' => 'fab fa-whatsapp',     'color' => 'text-green-400',   'label' => 'WhatsApp Business'],
         'promo'         => ['icon' => 'fas fa-tag',          'color' => 'text-yellow-400',  'label' => 'Code Promo'],
+        'email'         => ['icon' => 'fas fa-envelope',     'color' => 'text-sky-400',     'label' => 'Email (SMTP)'],
         'notifications' => ['icon' => 'fas fa-bell',         'color' => 'text-pink-400',    'label' => 'Notifications'],
         'security'      => ['icon' => 'fas fa-shield-alt',   'color' => 'text-red-400',     'label' => 'Sécurité'],
     ];
@@ -150,6 +154,26 @@
                             <option value="test" {{ old('configs.' . $config->key, $config->value) === 'test' ? 'selected' : '' }}>🧪 Test / Dev — vidéo d'échantillon</option>
                         </select>
 
+                        @elseif($config->key === 'mail_mailer')
+                        <!-- Choix du mailer -->
+                        <select name="configs[{{ $config->key }}]"
+                                id="config_{{ $config->key }}"
+                                class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500 transition">
+                            <option value="log" {{ old('configs.' . $config->key, $config->value) === 'log' ? 'selected' : '' }}>📝 Log (dev — emails écrits dans les logs)</option>
+                            <option value="smtp" {{ old('configs.' . $config->key, $config->value) === 'smtp' ? 'selected' : '' }}>📤 SMTP (serveur d'envoi)</option>
+                            <option value="resend" {{ old('configs.' . $config->key, $config->value) === 'resend' ? 'selected' : '' }}>⚡ Resend (API)</option>
+                        </select>
+
+                        @elseif($config->key === 'mail_encryption')
+                        <!-- Chiffrement SMTP -->
+                        <select name="configs[{{ $config->key }}]"
+                                id="config_{{ $config->key }}"
+                                class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500 transition">
+                            <option value="tls" {{ old('configs.' . $config->key, $config->value) === 'tls' ? 'selected' : '' }}>TLS (port 587)</option>
+                            <option value="ssl" {{ old('configs.' . $config->key, $config->value) === 'ssl' ? 'selected' : '' }}>SSL (port 465)</option>
+                            <option value="none" {{ in_array(old('configs.' . $config->key, $config->value), ['none', 'aucun', ''], true) ? 'selected' : '' }}>Aucun</option>
+                        </select>
+
                         @elseif(str_contains($config->key, 'mode'))
                         <!-- Mode Selector (Sandbox/Live) -->
                         <select name="configs[{{ $config->key }}]"
@@ -213,6 +237,18 @@
                 </div>
                 @endif
 
+                @if($group === 'email')
+                <div class="px-6 pb-2 -mt-2">
+                    <div class="bg-sky-500/10 border border-sky-500/30 rounded-lg p-4 text-sm text-sky-200">
+                        <p class="font-medium text-sky-300 mb-1"><i class="fas fa-circle-info mr-1"></i> Envoi réel des emails</p>
+                        <p class="mb-1"><strong>Log</strong> : les emails (identifiants producteur, OTP…) sont écrits dans les logs, <strong>pas</strong> livrés — pour le dev uniquement.</p>
+                        <p class="mb-1"><strong>SMTP</strong> : renseignez hôte, port, utilisateur, mot de passe et chiffrement de votre serveur d'envoi.</p>
+                        <p class="mb-1"><strong>Resend</strong> : indiquez seulement la clé API Resend (le reste est ignoré).</p>
+                        <p class="text-sky-300/90 mt-2"><i class="fas fa-paper-plane mr-1"></i> Après enregistrement, cliquez sur <strong>« Envoyer un email test »</strong> pour vérifier la livraison.</p>
+                    </div>
+                </div>
+                @endif
+
                 <!-- Action Buttons (par groupe) -->
                 <div class="bg-dark-50 px-6 py-4 border-t border-dark-200 flex gap-4">
                     <button type="submit"
@@ -224,6 +260,13 @@
                             onclick="document.getElementById('kpay-test-form').submit()"
                             class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg transition">
                         <i class="fas fa-plug mr-2"></i> Tester la connexion
+                    </button>
+                    @endif
+                    @if($group === 'email')
+                    <button type="button"
+                            onclick="document.getElementById('mail-test-form').submit()"
+                            class="bg-sky-600 hover:bg-sky-700 text-white px-6 py-3 rounded-lg transition whitespace-nowrap">
+                        <i class="fas fa-paper-plane mr-2"></i> Envoyer un email test
                     </button>
                     @endif
                     <button type="button"
