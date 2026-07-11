@@ -6,17 +6,17 @@
 @section('content')
 <div class="space-y-6">
 
-    {{-- Identifiants générés : affichés UNE seule fois --}}
+    {{-- Fallback : l'email n'a pas pu partir → on affiche le mot de passe UNE fois --}}
     @if(session('new_producer'))
         @php $np = session('new_producer'); @endphp
-        <div class="bg-green-500/10 border border-green-500/40 rounded-xl p-6"
+        <div class="bg-amber-500/10 border border-amber-500/40 rounded-xl p-6"
              x-data="{ copied:false }">
             <div class="flex items-start gap-3">
-                <i class="fas fa-circle-check text-green-400 text-2xl mt-1"></i>
+                <i class="fas fa-triangle-exclamation text-amber-400 text-2xl mt-1"></i>
                 <div class="flex-1 min-w-0">
-                    <h3 class="text-white font-semibold text-lg">Producteur « {{ $np['name'] }} » créé</h3>
-                    <p class="text-green-200/80 text-sm mt-1">
-                        Voici ses identifiants. <span class="font-semibold text-white">Note-les maintenant</span> :
+                    <h3 class="text-white font-semibold text-lg">Producteur « {{ $np['name'] }} » créé — email non envoyé</h3>
+                    <p class="text-amber-200/80 text-sm mt-1">
+                        L'envoi automatique des identifiants a échoué. <span class="font-semibold text-white">Transmets-les manuellement</span> :
                         le mot de passe ne sera plus jamais affiché.
                     </p>
                     <div class="mt-4 grid sm:grid-cols-2 gap-3">
@@ -95,13 +95,22 @@
                             <td class="px-6 py-3 text-gray-400">{{ $producer->media_count }}</td>
                             <td class="px-6 py-3 text-gray-500">{{ $producer->created_at?->diffForHumans() }}</td>
                             <td class="px-6 py-3 text-right">
-                                <form action="{{ route('producers.destroy', $producer) }}" method="POST" class="inline"
-                                      onsubmit="return confirm('Supprimer ce producteur ? Ses contenus restent dans le catalogue, sans propriétaire.')">
-                                    @csrf @method('DELETE')
-                                    <button type="submit" class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-red-500/30 text-red-300" title="Supprimer">
-                                        <i class="fas fa-trash text-xs"></i>
-                                    </button>
-                                </form>
+                                <div class="inline-flex items-center gap-2">
+                                    <form action="{{ route('producers.resend', $producer) }}" method="POST" class="inline"
+                                          onsubmit="return confirm('Régénérer un nouveau mot de passe et l\'envoyer par email à {{ $producer->email }} ? L\'ancien mot de passe sera invalidé.')">
+                                        @csrf
+                                        <button type="submit" class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-primary-500/30 text-primary-300" title="Renvoyer les identifiants par email">
+                                            <i class="fas fa-paper-plane text-xs"></i>
+                                        </button>
+                                    </form>
+                                    <form action="{{ route('producers.destroy', $producer) }}" method="POST" class="inline"
+                                          onsubmit="return confirm('Supprimer ce producteur ? Ses contenus restent dans le catalogue, sans propriétaire.')">
+                                        @csrf @method('DELETE')
+                                        <button type="submit" class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-red-500/30 text-red-300" title="Supprimer">
+                                            <i class="fas fa-trash text-xs"></i>
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     @empty

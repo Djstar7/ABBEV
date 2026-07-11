@@ -104,6 +104,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::get('/producers', [ProducerController::class, 'index'])->name('producers.index');
     Route::get('/producers/create', [ProducerController::class, 'create'])->name('producers.create');
     Route::post('/producers', [ProducerController::class, 'store'])->name('producers.store');
+    Route::post('/producers/{user}/resend', [ProducerController::class, 'resend'])->name('producers.resend');
     Route::delete('/producers/{user}', [ProducerController::class, 'destroy'])->name('producers.destroy');
 
     Route::resource('subscription-plans', App\Http\Controllers\SubscriptionPlanController::class);
