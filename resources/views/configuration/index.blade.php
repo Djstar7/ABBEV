@@ -252,6 +252,11 @@
     </div>
 </div>
 
+{{-- Dans @push('scripts') : ce bloc est placé dans #page-scripts, que la
+     navigation PJAX RÉ-EXÉCUTE. Un <script> laissé inline dans le contenu de
+     page n'est PAS exécuté quand le PJAX l'injecte via innerHTML → l'onglet
+     Alpine « configForm » serait alors indéfini et la page casserait. --}}
+@push('scripts')
 <script>
 function configForm(defaultTab) {
     return {
@@ -259,4 +264,5 @@ function configForm(defaultTab) {
     }
 }
 </script>
+@endpush
 @endsection
