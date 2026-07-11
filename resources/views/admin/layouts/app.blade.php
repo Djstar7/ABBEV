@@ -70,11 +70,87 @@
 
     <style>
         [x-cloak] { display: none !important; }
+
+        /* ====== Loader de navigation ABBEV (PJAX) ====== */
+        /* Barre de progression fine en haut (dégradé cyan ABBEV + halo). */
+        #abbev-nav-progress {
+            position: fixed; top: 0; left: 0; right: 0; height: 3px;
+            z-index: 9999; pointer-events: none; opacity: 0;
+            transition: opacity .3s ease;
+        }
+        #abbev-nav-progress.is-active { opacity: 1; }
+        #abbev-nav-progress .bar {
+            height: 100%; width: 0;
+            background: linear-gradient(90deg, #22d3ee, #06b6d4, #0891b2);
+            box-shadow: 0 0 12px rgba(34,211,238,.7), 0 0 4px rgba(34,211,238,.5);
+            transition: width .25s cubic-bezier(.2,.6,.3,1);
+        }
+        /* Overlay centré sur la zone de contenu (la sidebar reste visible). */
+        #abbev-nav-overlay {
+            position: fixed; inset: 0; z-index: 9990;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(9,9,11,.55); backdrop-filter: blur(3px);
+            opacity: 0; visibility: hidden;
+            transition: opacity .25s ease, visibility .25s ease;
+        }
+        @media (min-width: 1024px) { #abbev-nav-overlay { left: 16rem; } }
+        #abbev-nav-overlay.is-visible { opacity: 1; visibility: visible; }
+        #abbev-nav-overlay .box {
+            display: flex; flex-direction: column; align-items: center; gap: 16px;
+        }
+        #abbev-nav-overlay .ring { position: relative; width: 78px; height: 78px; }
+        #abbev-nav-overlay .ring::before {
+            content: ""; position: absolute; inset: 0; border-radius: 50%;
+            border: 3px solid rgba(34,211,238,.15);
+        }
+        #abbev-nav-overlay .ring::after {
+            content: ""; position: absolute; inset: 0; border-radius: 50%;
+            border: 3px solid transparent;
+            border-top-color: #22d3ee; border-right-color: #06b6d4;
+            animation: abbev-spin .8s linear infinite;
+        }
+        /* Conteneur circulaire qui CLIPPE le logo (overflow:hidden) → jamais
+           de carré, quel que soit le rendu du border-radius sur <img>. */
+        #abbev-nav-overlay .logo {
+            position: absolute; inset: 13px; border-radius: 50%;
+            overflow: hidden;
+        }
+        #abbev-nav-overlay .logo img {
+            width: 100%; height: 100%; object-fit: cover; display: block;
+        }
+        #abbev-nav-overlay .label {
+            color: #d4d4d8; font-size: 13px; letter-spacing: 2px;
+            text-transform: uppercase; animation: abbev-pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes abbev-spin { to { transform: rotate(360deg); } }
+        @keyframes abbev-pulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+        /* Fondu doux du nouveau contenu injecté par PJAX. */
+        main.abbev-nav-fade { animation: abbev-fade .35s ease; }
+        @keyframes abbev-fade {
+            from { opacity: .35; transform: translateY(6px); }
+            to { opacity: 1; transform: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #abbev-nav-overlay .ring::after, #abbev-nav-overlay .label,
+            main.abbev-nav-fade { animation: none; }
+        }
     </style>
 
     <div id="page-styles">@stack('styles')</div>
 </head>
 <body class="bg-dark-50" x-data="{ sidebarOpen: false }">
+    {{-- Loader de navigation ABBEV : feedback immédiat au clic (lien, bouton,
+         formulaire) pendant que le serveur traite. --}}
+    <div id="abbev-nav-progress"><div class="bar"></div></div>
+    <div id="abbev-nav-overlay" aria-hidden="true">
+        <div class="box">
+            <div class="ring">
+                <span class="logo"><img src="{{ asset('logo/logo.jpeg') }}" alt=""></span>
+            </div>
+            <span class="label">Chargement…</span>
+        </div>
+    </div>
+
     <div class="min-h-screen">
         <!-- Mobile Menu Overlay -->
         <div x-show="sidebarOpen"
@@ -466,8 +542,50 @@
 
         UE.init();
 
+        /* ====== LOADER DE NAVIGATION (feedback immédiat au clic) ====== */
+        const NavLoader = ABBEV.navLoader = {
+            active:false, _p:0, trickle:null, overlayTimer:null, failsafe:null,
+            _els(){
+                return {
+                    prog: document.getElementById('abbev-nav-progress'),
+                    bar: document.querySelector('#abbev-nav-progress .bar'),
+                    overlay: document.getElementById('abbev-nav-overlay'),
+                };
+            },
+            start(){
+                if(this.active) return; this.active=true;
+                const {prog,bar,overlay}=this._els();
+                if(prog&&bar){
+                    this._p=8; prog.classList.add('is-active'); bar.style.width='8%';
+                    requestAnimationFrame(()=>{ bar.style.width='32%'; });
+                    clearInterval(this.trickle);
+                    this.trickle=setInterval(()=>{
+                        this._p=Math.min(90,this._p+Math.random()*9);
+                        bar.style.width=this._p+'%';
+                    },420);
+                }
+                clearTimeout(this.overlayTimer);
+                // Overlay seulement si le serveur met > 240ms (évite le clignotement).
+                this.overlayTimer=setTimeout(()=>{ if(overlay) overlay.classList.add('is-visible'); },240);
+                // Filet de sécurité si la navigation n'aboutit pas (submit annulé…).
+                clearTimeout(this.failsafe);
+                this.failsafe=setTimeout(()=>this.done(),15000);
+            },
+            done(){
+                if(!this.active) return; this.active=false;
+                const {prog,bar,overlay}=this._els();
+                clearInterval(this.trickle); clearTimeout(this.overlayTimer); clearTimeout(this.failsafe);
+                if(overlay) overlay.classList.remove('is-visible');
+                if(prog&&bar){
+                    bar.style.width='100%';
+                    setTimeout(()=>{ prog.classList.remove('is-active'); setTimeout(()=>{ bar.style.width='0%'; },300); },200);
+                }
+            },
+        };
+
         /* ====== PJAX (navigation sans rechargement) ====== */
         async function pjax(url, push){
+            NavLoader.start();
             try{
                 const resp=await fetch(url);
                 if(!resp.ok) throw resp;
@@ -475,7 +593,13 @@
                 const doc=new DOMParser().parseFromString(html,'text/html');
 
                 const curMain=document.querySelector('main'), newMain=doc.querySelector('main');
-                if(curMain&&newMain) curMain.innerHTML=newMain.innerHTML;
+                if(curMain&&newMain){
+                    curMain.innerHTML=newMain.innerHTML;
+                    // Retrigger l'animation de fondu du nouveau contenu.
+                    curMain.classList.remove('abbev-nav-fade');
+                    void curMain.offsetWidth;
+                    curMain.classList.add('abbev-nav-fade');
+                }
 
                 // Re-exécuter les scripts spécifiques à la page
                 const curPS=document.getElementById('page-scripts'), newPS=doc.getElementById('page-scripts');
@@ -506,6 +630,7 @@
 
                 if(push!==false) history.pushState({pjax:1},'',url);
                 window.scrollTo(0,0);
+                NavLoader.done();
             }catch(e){ window.location.href=url; }
         }
 
@@ -533,6 +658,21 @@
             new FormData(f).forEach((v,k)=>{if(v)u.searchParams.set(k,v);else u.searchParams.delete(k);});
             pjax(u.href);
         },true);
+
+        // Feedback immédiat sur les formulaires POST/PUT/DELETE (création,
+        // édition, suppression = navigation complète, pas de PJAX). On NE
+        // preventDefault PAS : le navigateur soumet, le loader tient jusqu'au
+        // rechargement de la nouvelle page.
+        document.addEventListener('submit',(e)=>{
+            const f=e.target;
+            if(!f||f.method.toUpperCase()==='GET') return;
+            // Si le formulaire est invalide, le navigateur bloque l'envoi.
+            if(typeof f.checkValidity==='function' && !f.checkValidity()) return;
+            NavLoader.start();
+        },true);
+
+        // bfcache / retour navigateur : on garantit que le loader est masqué.
+        window.addEventListener('pageshow',()=>NavLoader.done());
 
         window.addEventListener('popstate',()=>pjax(location.href,false));
         history.replaceState({pjax:1},'',location.href);
