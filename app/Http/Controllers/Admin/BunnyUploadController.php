@@ -249,11 +249,12 @@ class BunnyUploadController extends Controller
     {
         $this->authorizeUploadOwnership($upload);
 
-        if (! $upload->temp_path || ! is_file($upload->temp_path)) {
+        $path = $upload->localFilePath();
+        if (! $path) {
             abort(404, 'Fichier original non disponible (déjà transféré vers Bunny ou supprimé).');
         }
 
-        return response()->download($upload->temp_path, $upload->original_filename);
+        return response()->download($path, $upload->original_filename);
     }
 
     /**
@@ -267,7 +268,7 @@ class BunnyUploadController extends Controller
         if ($upload->status !== 'failed') {
             return response()->json(['error' => 'Seuls les uploads en échec peuvent être relancés.'], 422);
         }
-        if (! $upload->temp_path || ! is_file($upload->temp_path)) {
+        if (! $upload->localFilePath()) {
             return response()->json(['error' => 'Fichier original introuvable : impossible de relancer.'], 422);
         }
 
@@ -360,7 +361,7 @@ class BunnyUploadController extends Controller
 
     private function present(BunnyUpload $upload): array
     {
-        $hasLocalFile = (bool) ($upload->temp_path && is_file($upload->temp_path));
+        $hasLocalFile = $upload->localFilePath() !== null;
 
         return [
             'id'             => $upload->id,

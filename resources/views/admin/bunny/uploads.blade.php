@@ -129,7 +129,7 @@
                     @forelse($uploads as $u)
                         @php
                             $meta       = $statusMeta[$u->status] ?? ['—', 'bg-gray-500/15 text-gray-300 border-gray-500/30', 'fa-circle'];
-                            $hasFile    = $u->temp_path && is_file($u->temp_path);
+                            $hasFile    = $u->localFilePath() !== null;
                             $localReady = $u->hasLocalCopy();
                             $inProgress = in_array($u->status, ['uploading','transferring','processing'], true);
 

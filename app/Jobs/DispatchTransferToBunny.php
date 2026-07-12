@@ -104,14 +104,15 @@ class DispatchTransferToBunny implements ShouldQueue
                 $upload->update(['status' => 'transferring']);
             }
 
-            if (! $upload->temp_path || ! is_file($upload->temp_path)) {
-                throw new \RuntimeException("Fichier temporaire absent : {$upload->temp_path}");
+            $source = $upload->localFilePath();
+            if (! $source) {
+                throw new \RuntimeException("Fichier local absent (temp_path et copie publique introuvables).");
             }
 
             $lastPersist = 0;
             $bunny->uploadVideoStream(
                 $upload->bunny_guid,
-                $upload->temp_path,
+                $source,
                 function (int $sent, int $total) use ($upload, &$lastPersist) {
                     $now = time();
                     if ($now - $lastPersist >= 2) { // throttle : 1 écriture / 2 s max
