@@ -12,7 +12,8 @@
 </div>
 
 <!-- Form Card -->
-<div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-8" x-data="planForm()">
+<div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-8"
+     x-data="{ duration: {{ old('duration_days', 30) }}, setDuration(days){ this.duration = days } }">
     <form action="{{ route('subscription-plans.store') }}" method="POST">
         @csrf
 
@@ -192,14 +193,4 @@
     </form>
 </div>
 
-<script>
-function planForm() {
-    return {
-        duration: 30,
-        setDuration(days) {
-            this.duration = days;
-        }
-    }
-}
-</script>
 @endsection
