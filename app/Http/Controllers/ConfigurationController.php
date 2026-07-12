@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Configuration;
+use App\Services\BunnyStreamService;
 use App\Services\KpayService;
+use App\Support\RuntimeBunnyConfig;
 use App\Support\RuntimeMailConfig;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -134,5 +136,44 @@ class ConfigurationController extends Controller
                 ->with('error', "Échec de l'envoi via « {$mailer} » : ".$e->getMessage())
                 ->with('active_tab', 'email');
         }
+    }
+
+    /**
+     * Teste la connectivité Bunny Stream avec la configuration actuelle (groupe
+     * « bunny »). Vérifie que la clé API + la library répondent (cause typique
+     * des erreurs 401 à l'upload).
+     */
+    public function testBunny(BunnyStreamService $bunny)
+    {
+        // Réapplique la config Bunny de la base (au cas où elle vient d'être
+        // enregistrée), puis reconstruit le service avec ces valeurs.
+        RuntimeBunnyConfig::apply();
+        $bunny = new BunnyStreamService();
+
+        if (! $bunny->isConfigured()) {
+            return back()
+                ->with('error', 'Bunny non configuré : renseignez Library ID, clé API et CDN Hostname.')
+                ->with('active_tab', 'bunny');
+        }
+
+        $result = $bunny->ping();
+
+        if ($result['ok']) {
+            return back()
+                ->with('success', 'Connexion Bunny réussie ! La clé API et la library sont valides.')
+                ->with('active_tab', 'bunny');
+        }
+
+        $http = $result['status'];
+        $detail = match ($http) {
+            401, 403 => 'clé API (AccessKey) invalide.',
+            404      => 'Library ID introuvable.',
+            null     => 'Bunny injoignable ('.($result['message'] ?? 'erreur réseau').').',
+            default  => 'réponse HTTP '.$http.'.',
+        };
+
+        return back()
+            ->with('error', 'Échec de connexion Bunny : '.$detail)
+            ->with('active_tab', 'bunny');
     }
 }

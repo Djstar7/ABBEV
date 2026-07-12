@@ -198,6 +198,18 @@ class ConfigurationSeeder extends Seeder
             ['key' => 'mail_from_name', 'value' => 'ABBEV', 'group' => 'email', 'description' => 'Nom d\'expéditeur (From)', 'is_secret' => false],
 
             // ============================================
+            // BUNNY STREAM (hébergement + transcodage HLS des vidéos)
+            // ============================================
+            // Pilotable depuis le dashboard (corrige la clé API en cas d'erreur
+            // 401 à l'upload). Appliqué au runtime par App\Support\RuntimeBunnyConfig.
+            // Valeurs vides = on garde la config .env.
+            ['key' => 'bunny_library_id', 'value' => '', 'group' => 'bunny', 'description' => 'Library ID Bunny Stream', 'is_secret' => false],
+            ['key' => 'bunny_api_key', 'value' => '', 'group' => 'bunny', 'description' => 'Clé API Bunny Stream (AccessKey)', 'is_secret' => true],
+            ['key' => 'bunny_cdn_hostname', 'value' => '', 'group' => 'bunny', 'description' => 'CDN Hostname (ex: vz-xxxxxxxx.b-cdn.net)', 'is_secret' => false],
+            ['key' => 'bunny_token_key', 'value' => '', 'group' => 'bunny', 'description' => 'Token Key (URLs signées)', 'is_secret' => true],
+            ['key' => 'bunny_token_ttl', 'value' => '3600', 'group' => 'bunny', 'description' => 'Durée de validité des URLs signées (secondes)', 'is_secret' => false],
+
+            // ============================================
             // NOTIFICATIONS
             // ============================================
             ['key' => 'email_notifications', 'value' => '1', 'group' => 'notifications', 'description' => 'Notifications par email activées', 'is_secret' => false],

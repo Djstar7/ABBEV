@@ -24,6 +24,9 @@
 {{-- Email test form (hidden) : envoie un email de test à l'admin connecté --}}
 <form id="mail-test-form" action="{{ route('configuration.testMail') }}" method="POST" class="hidden">@csrf</form>
 
+{{-- Bunny test form (hidden) : teste la connectivité Bunny Stream --}}
+<form id="bunny-test-form" action="{{ route('configuration.testBunny') }}" method="POST" class="hidden">@csrf</form>
+
 @if(session('error'))
 <div class="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
     <div class="flex items-start">
@@ -64,6 +67,7 @@
         'whatsapp'      => ['icon' => 'fab fa-whatsapp',     'color' => 'text-green-400',   'label' => 'WhatsApp Business'],
         'promo'         => ['icon' => 'fas fa-tag',          'color' => 'text-yellow-400',  'label' => 'Code Promo'],
         'email'         => ['icon' => 'fas fa-envelope',     'color' => 'text-sky-400',     'label' => 'Email (SMTP)'],
+        'bunny'         => ['icon' => 'fas fa-cloud',        'color' => 'text-orange-400',  'label' => 'Bunny Stream (vidéo)'],
         'notifications' => ['icon' => 'fas fa-bell',         'color' => 'text-pink-400',    'label' => 'Notifications'],
         'security'      => ['icon' => 'fas fa-shield-alt',   'color' => 'text-red-400',     'label' => 'Sécurité'],
     ];
@@ -237,6 +241,17 @@
                 </div>
                 @endif
 
+                @if($group === 'bunny')
+                <div class="px-6 pb-2 -mt-2">
+                    <div class="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 text-sm text-orange-200">
+                        <p class="font-medium text-orange-300 mb-1"><i class="fas fa-circle-info mr-1"></i> Hébergement vidéo Bunny Stream</p>
+                        <p class="mb-1">Ces paramètres pilotent l'envoi des vidéos vers Bunny (transcodage HLS, lecture CDN). Une <strong>clé API invalide</strong> provoque l'erreur <strong>401</strong> à l'upload — les vidéos restent alors « disponibles en local ».</p>
+                        <p class="mb-1"><strong>Library ID</strong> + <strong>clé API</strong> (AccessKey) + <strong>CDN Hostname</strong> viennent du dashboard Bunny.tv. Laisser un champ vide conserve la valeur du <code>.env</code>.</p>
+                        <p class="text-orange-300/90 mt-2"><i class="fas fa-plug mr-1"></i> Après enregistrement, cliquez sur <strong>« Tester la connexion Bunny »</strong>, puis « Relancer » sur les uploads en attente.</p>
+                    </div>
+                </div>
+                @endif
+
                 @if($group === 'email')
                 <div class="px-6 pb-2 -mt-2">
                     <div class="bg-sky-500/10 border border-sky-500/30 rounded-lg p-4 text-sm text-sky-200">
@@ -267,6 +282,13 @@
                             onclick="document.getElementById('mail-test-form').submit()"
                             class="bg-sky-600 hover:bg-sky-700 text-white px-6 py-3 rounded-lg transition whitespace-nowrap">
                         <i class="fas fa-paper-plane mr-2"></i> Envoyer un email test
+                    </button>
+                    @endif
+                    @if($group === 'bunny')
+                    <button type="button"
+                            onclick="document.getElementById('bunny-test-form').submit()"
+                            class="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg transition whitespace-nowrap">
+                        <i class="fas fa-plug mr-2"></i> Tester la connexion Bunny
                     </button>
                     @endif
                     <button type="button"

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\RuntimeBunnyConfig;
 use App\Support\RuntimeMailConfig;
 use Illuminate\Support\ServiceProvider;
 
@@ -14,8 +15,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Applique la config email pilotée depuis le dashboard (groupe « email »)
-        // par-dessus le .env. Résilient si la table n'existe pas encore.
+        // Applique les configs pilotées depuis le dashboard (groupes « email » et
+        // « bunny ») par-dessus le .env. Résilient si la table n'existe pas encore.
         RuntimeMailConfig::apply();
+        RuntimeBunnyConfig::apply();
     }
 }
