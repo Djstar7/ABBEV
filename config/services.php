@@ -72,6 +72,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | ExchangeRate-API (taux de change live des devises)
+    |--------------------------------------------------------------------------
+    | Alimente currencies.rate_from_xof via `php artisan rates:update` (planifié
+    | quotidiennement). Base = XOF (devise de référence de la plateforme).
+    | Clé : https://www.exchangerate-api.com/ (plan gratuit ~1 maj/jour).
+    */
+    'exchangerate' => [
+        'key'  => env('EXCHANGERATE_API_KEY', ''),
+        'base' => env('EXCHANGERATE_BASE', 'XOF'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Apple App Store Server API (In-App Purchase — abonnement auto-renouvelable)
     |--------------------------------------------------------------------------
     | Sert à vérifier les transactions StoreKit côté serveur et à traiter les
