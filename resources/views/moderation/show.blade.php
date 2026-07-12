@@ -10,12 +10,19 @@
         <i class="fas fa-arrow-left"></i> Retour à la modération
     </a>
 
-    {{-- Aperçu vidéo --}}
+    {{-- Aperçu vidéo : chargé et prêt à la lecture --}}
     <div class="bg-dark-100 rounded-xl border border-dark-200 overflow-hidden">
-        @php $embed = $media->isMovie() ? $media->bunnyEmbedUrl() : null; @endphp
-        @if($embed)
+        @if($media->isMovie() && $preview && $preview['kind'] === 'bunny')
             <div class="aspect-video bg-black">
-                <iframe src="{{ $embed }}" class="w-full h-full" allow="autoplay; fullscreen" allowfullscreen></iframe>
+                <iframe src="{{ $preview['url'] }}" class="w-full h-full" allow="autoplay; fullscreen" allowfullscreen></iframe>
+            </div>
+        @elseif($media->isMovie() && $preview && $preview['kind'] === 'local')
+            <div class="aspect-video bg-black">
+                <video class="w-full h-full" controls preload="auto" playsinline
+                       controlslist="nodownload" oncontextmenu="return false;">
+                    <source src="{{ $preview['url'] }}" type="{{ $preview['mime'] }}">
+                    Votre navigateur ne peut pas lire cette vidéo.
+                </video>
             </div>
         @elseif($media->isSeries())
             <div class="p-5">
@@ -24,17 +31,20 @@
                     @forelse($media->seasonsRelation as $season)
                         <p class="text-gray-300 text-sm font-medium">Saison {{ $season->season_number }}</p>
                         @foreach($season->episodes as $ep)
-                            @php
-                                $epEmbed = ($ep->video_provider === 'bunny' && $ep->video_id)
-                                    ? "https://iframe.mediadelivery.net/embed/".($ep->video_library_id ?: config('services.bunny.library_id'))."/".$ep->video_id
-                                    : null;
-                            @endphp
+                            @php $ps = $episodePreviews[$ep->id] ?? ['kind' => null]; @endphp
                             <div class="border border-dark-200 rounded-lg overflow-hidden">
                                 <div class="px-3 py-2 text-sm text-white bg-dark-200/40">Ép. {{ $ep->episode_number }} — {{ $ep->title }}</div>
-                                @if($epEmbed)
-                                    <div class="aspect-video bg-black"><iframe src="{{ $epEmbed }}" class="w-full h-full" allowfullscreen></iframe></div>
+                                @if($ps['kind'] === 'bunny')
+                                    <div class="aspect-video bg-black"><iframe src="{{ $ps['url'] }}" class="w-full h-full" allowfullscreen></iframe></div>
+                                @elseif($ps['kind'] === 'local')
+                                    <div class="aspect-video bg-black">
+                                        <video class="w-full h-full" controls preload="metadata" playsinline
+                                               controlslist="nodownload" oncontextmenu="return false;">
+                                            <source src="{{ $ps['url'] }}" type="{{ $ps['mime'] }}">
+                                        </video>
+                                    </div>
                                 @else
-                                    <p class="px-3 py-2 text-xs text-gray-500">Aperçu indisponible (vidéo locale).</p>
+                                    <p class="px-3 py-2 text-xs text-gray-500">Aperçu indisponible (fichier introuvable).</p>
                                 @endif
                             </div>
                         @endforeach
@@ -46,7 +56,7 @@
         @else
             <div class="p-8 text-center text-gray-500">
                 <i class="fas fa-film text-3xl mb-2 block opacity-50"></i>
-                Aperçu vidéo indisponible (vidéo locale ou non attribuée).
+                Aperçu vidéo indisponible (vidéo non attribuée ou fichier introuvable).
             </div>
         @endif
     </div>

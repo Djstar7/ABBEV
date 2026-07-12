@@ -6,6 +6,8 @@ use App\Models\Category;
 use App\Models\Media;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -93,6 +95,29 @@ class ModerationTest extends TestCase
         $movie->refresh();
         $this->assertSame('rejected', $movie->moderation_status);
         $this->assertSame('Qualité insuffisante.', $movie->rejection_reason);
+    }
+
+    public function test_examen_charge_un_lecteur_pret_pour_une_video_locale(): void
+    {
+        Storage::fake('local');
+        $path = Storage::disk('local')->putFile('videos', UploadedFile::fake()->create('t.mp4', 10, 'video/mp4'));
+
+        $assistant = User::factory()->create(['role' => 'assistant']);
+        $movie = Media::create([
+            'category_id' => $this->category->id,
+            'type' => 'movie',
+            'title' => 'Locale',
+            'slug' => 'locale-' . uniqid(),
+            'moderation_status' => 'pending',
+            'video_provider' => 'local',
+            'video_path' => $path,
+        ]);
+
+        $this->actingAs($assistant)
+            ->get(route('moderation.show', $movie->id))
+            ->assertOk()
+            ->assertSee('watch/local/movie', false)
+            ->assertSee('<video', false);
     }
 
     public function test_un_utilisateur_standard_ne_peut_pas_moderer(): void
