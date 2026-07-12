@@ -11,6 +11,12 @@ use App\Http\Controllers\ProducerController;
 use App\Http\Controllers\ScreeningController;
 use Illuminate\Support\Facades\Route;
 
+// Image publique (poster/cover/banner/thumbnail locale) servie AVEC CORS,
+// pour l'affichage sur Flutter Web (CanvasKit). Voir PublicImageController.
+Route::get('/media/img/{path}', App\Http\Controllers\PublicImageController::class)
+    ->where('path', '.*')
+    ->name('public.image');
+
 // Root redirect to admin login
 Route::get('/', function () {
     return redirect()->route('admin.login');
