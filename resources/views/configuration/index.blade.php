@@ -70,7 +70,7 @@
     $defaultTab = session('active_tab', $configurations->keys()->first());
 @endphp
 
-<div x-data="configForm('{{ $defaultTab }}')">
+<div x-data="{ activeTab: '{{ $defaultTab }}' }">
 
     <!-- Tabs Navigation -->
     <div class="mb-6 border-b border-dark-200 flex flex-wrap gap-1">
@@ -295,17 +295,9 @@
     </div>
 </div>
 
-{{-- Dans @push('scripts') : ce bloc est placé dans #page-scripts, que la
-     navigation PJAX RÉ-EXÉCUTE. Un <script> laissé inline dans le contenu de
-     page n'est PAS exécuté quand le PJAX l'injecte via innerHTML → l'onglet
-     Alpine « configForm » serait alors indéfini et la page casserait. --}}
-@push('scripts')
-<script>
-function configForm(defaultTab) {
-    return {
-        activeTab: defaultTab,
-    }
-}
-</script>
-@endpush
+{{-- L'état des onglets est désormais défini INLINE dans x-data
+     (« { activeTab: '…' } ») : plus aucune dépendance à une fonction JS
+     externe. Cela évite le bug de course PJAX où Alpine s'initialisait avant
+     que le script « configForm » ne soit (re)défini, figeant les onglets sur
+     « Général » après une navigation interne. --}}
 @endsection
