@@ -88,6 +88,19 @@ class Media extends Model
         return $query->where('moderation_status', 'approved');
     }
 
+    /**
+     * Visibilité publique = approuvé par la modération ET publié (published_at
+     * nul ou passé). C'est LE filtre du catalogue public : un contenu en
+     * attente/rejeté n'apparaît jamais côté utilisateur.
+     */
+    public function scopePublished(Builder $query): Builder
+    {
+        return $query->where('moderation_status', 'approved')
+            ->where(function ($q) {
+                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
+            });
+    }
+
     /** Contenus en attente de modération. */
     public function scopePending(Builder $query): Builder
     {

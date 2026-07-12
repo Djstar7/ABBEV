@@ -14,16 +14,7 @@
     </a>
 </div>
 
-@if(session('success'))
-<div class="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-green-300">
-    <i class="fas fa-check-circle mr-2"></i> {{ session('success') }}
-</div>
-@endif
-@if(session('error'))
-<div class="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-300">
-    <i class="fas fa-exclamation-circle mr-2"></i> {{ session('error') }}
-</div>
-@endif
+{{-- Flash affiché par le layout admin (pas de doublon ici). --}}
 
 <!-- Stats Cards -->
 <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">

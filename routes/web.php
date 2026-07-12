@@ -33,10 +33,22 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/reset-password/{token}', [App\Http\Controllers\Admin\PasswordResetController::class, 'showReset'])->name('password.reset');
     Route::post('/reset-password', [App\Http\Controllers\Admin\PasswordResetController::class, 'reset'])->name('password.update');
 
-    Route::middleware(['auth', 'role:admin,producer'])->group(function () {
+    Route::middleware(['auth', 'role:admin,producer,assistant'])->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Espace MODÉRATION (admin + assistant) — validation des contenus
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'role:admin,assistant'])->group(function () {
+    Route::get('/moderation', [App\Http\Controllers\Admin\ModerationController::class, 'index'])->name('moderation.index');
+    Route::get('/moderation/{medium}', [App\Http\Controllers\Admin\ModerationController::class, 'show'])->name('moderation.show');
+    Route::post('/moderation/{medium}/approve', [App\Http\Controllers\Admin\ModerationController::class, 'approve'])->name('moderation.approve');
+    Route::post('/moderation/{medium}/reject', [App\Http\Controllers\Admin\ModerationController::class, 'reject'])->name('moderation.reject');
 });
 
 /*
@@ -123,6 +135,13 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::get('/producers/{user}', [ProducerController::class, 'show'])->name('producers.show');
     Route::post('/producers/{user}/resend', [ProducerController::class, 'resend'])->name('producers.resend');
     Route::delete('/producers/{user}', [ProducerController::class, 'destroy'])->name('producers.destroy');
+
+    // Assistants (direction artistique — modération des contenus)
+    Route::get('/assistants', [App\Http\Controllers\AssistantController::class, 'index'])->name('assistants.index');
+    Route::get('/assistants/create', [App\Http\Controllers\AssistantController::class, 'create'])->name('assistants.create');
+    Route::post('/assistants', [App\Http\Controllers\AssistantController::class, 'store'])->name('assistants.store');
+    Route::post('/assistants/{user}/resend', [App\Http\Controllers\AssistantController::class, 'resend'])->name('assistants.resend');
+    Route::delete('/assistants/{user}', [App\Http\Controllers\AssistantController::class, 'destroy'])->name('assistants.destroy');
 
     Route::resource('subscription-plans', App\Http\Controllers\SubscriptionPlanController::class);
     Route::get('/transactions', [App\Http\Controllers\TransactionController::class, 'index'])->name('transactions.index');

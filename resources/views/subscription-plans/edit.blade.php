@@ -40,6 +40,20 @@
                     @enderror
                 </div>
 
+                <!-- Tier Field (rémunération producteurs) -->
+                <div class="mb-6">
+                    <label for="tier" class="block text-sm font-medium text-gray-300 mb-2">
+                        Tier de rémunération <span class="text-red-400">*</span>
+                    </label>
+                    <select name="tier" id="tier" required
+                            class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500 transition">
+                        @foreach(['classique','standard','premium'] as $t)
+                            <option value="{{ $t }}" {{ old('tier', $plan->tier) === $t ? 'selected' : '' }}>{{ ucfirst($t) }}</option>
+                        @endforeach
+                    </select>
+                    <p class="mt-2 text-xs text-gray-500">À chaque abonnement à ce forfait, tout le contenu de ce tier reçoit +1 vue producteur.</p>
+                </div>
+
                 <!-- Price Field -->
                 <div class="mb-6">
                     <label for="price" class="block text-sm font-medium text-gray-300 mb-2">

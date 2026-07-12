@@ -321,6 +321,18 @@
                         Séries
                     </a>
 
+                    @if(auth()->user()->isAdmin() || auth()->user()->isAssistant())
+                    @php $__pendingModeration = \App\Models\Media::where('moderation_status', 'pending')->count(); @endphp
+                    <a href="{{ route('moderation.index') }}"
+                       class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('moderation.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
+                        <i class="fas fa-clipboard-check w-5 mr-3"></i>
+                        Modération
+                        @if($__pendingModeration > 0)
+                            <span class="ml-auto text-xs px-2 py-0.5 rounded-full bg-amber-500 text-white">{{ $__pendingModeration }}</span>
+                        @endif
+                    </a>
+                    @endif
+
                     @if(auth()->user()->isAdmin())
                     <a href="{{ route('categories.index') }}"
                        class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('categories.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
@@ -377,6 +389,12 @@
                        class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('producers.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
                         <i class="fas fa-clapperboard w-5 mr-3"></i>
                         Producteurs
+                    </a>
+
+                    <a href="{{ route('assistants.index') }}"
+                       class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('assistants.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
+                        <i class="fas fa-user-shield w-5 mr-3"></i>
+                        Assistants
                     </a>
                 </div>
 

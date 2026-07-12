@@ -27,29 +27,8 @@
 {{-- Bunny test form (hidden) : teste la connectivité Bunny Stream --}}
 <form id="bunny-test-form" action="{{ route('configuration.testBunny') }}" method="POST" class="hidden">@csrf</form>
 
-@if(session('error'))
-<div class="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-    <div class="flex items-start">
-        <i class="fas fa-times-circle text-red-400 text-xl mr-3 mt-1"></i>
-        <div>
-            <p class="text-red-300 font-medium mb-1">Erreur</p>
-            <p class="text-red-200 text-sm">{{ session('error') }}</p>
-        </div>
-    </div>
-</div>
-@endif
-
-@if(session('success'))
-<div class="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-    <div class="flex items-start">
-        <i class="fas fa-check-circle text-green-400 text-xl mr-3 mt-1"></i>
-        <div>
-            <p class="text-green-300 font-medium mb-1">Succès</p>
-            <p class="text-green-200 text-sm">{{ session('success') }}</p>
-        </div>
-    </div>
-</div>
-@endif
+{{-- Les messages flash (succès/erreur) sont affichés par le layout admin :
+     on ne les duplique pas ici. --}}
 
 @php
     $groupMeta = [
