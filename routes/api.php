@@ -31,6 +31,12 @@ Route::prefix('v1')->group(function () {
         Route::post('/send-otp',   [AuthApiController::class, 'sendOtp']);
         Route::post('/verify-otp', [AuthApiController::class, 'verifyOtp']);
 
+        // Mot de passe oublié : code par email → vérification → nouveau mot de passe.
+        Route::post('/forgot-password',   [AuthApiController::class, 'forgotPassword'])
+            ->middleware('throttle:6,1');
+        Route::post('/verify-reset-code', [AuthApiController::class, 'verifyResetCode']);
+        Route::post('/reset-password',    [AuthApiController::class, 'resetPassword']);
+
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('/me',         [AuthApiController::class, 'me']);
             Route::patch('/me',       [AuthApiController::class, 'updateMe']);

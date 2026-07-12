@@ -281,6 +281,145 @@ class AuthApiController extends Controller
     }
 
     /**
+     * Mot de passe oublié (#6) — envoie un code à 6 chiffres par email, sur le
+     * même mécanisme que l'OTP d'inscription (table EmailVerification).
+     *
+     * Anti-énumération : on répond TOUJOURS le même message, qu'un compte
+     * existe ou non (empêche de deviner les emails inscrits). Le code n'est
+     * réellement envoyé que si le compte existe.
+     */
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $email = $data['email'];
+        $user = User::where('email', $email)->first();
+
+        if ($user) {
+            $code = $this->isOtpTestEmail($email)
+                ? (string) config('auth.otp_test_code')
+                : (string) random_int(100000, 999999);
+
+            EmailVerification::updateOrCreate(
+                ['email' => $email],
+                [
+                    'code' => $code,
+                    'expires_at' => Carbon::now()->addMinutes(15),
+                    'verified' => false,
+                ]
+            );
+
+            if (! $this->isOtpTestEmail($email)) {
+                try {
+                    Mail::raw(
+                        "Bonjour,\n\nVotre code de réinitialisation de mot de passe ABBEV est : $code\n\n".
+                        "Ce code expire dans 15 minutes.\n\n".
+                        "Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.\n\nL'équipe ABBEV",
+                        function ($message) use ($email) {
+                            $message->to($email)
+                                ->subject('Réinitialisation de mot de passe - ABBEV');
+                        }
+                    );
+                } catch (\Throwable $e) {
+                    Log::error('[forgotPassword] envoi email échoué', [
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Message générique quoi qu'il arrive (anti-énumération).
+                }
+            }
+        }
+
+        return response()->json([
+            'message' => 'Si un compte existe pour cet email, un code de réinitialisation a été envoyé.',
+        ]);
+    }
+
+    /**
+     * Vérifie le code de réinitialisation SANS le consommer : permet à l'app de
+     * débloquer l'écran « nouveau mot de passe » après saisie du bon code.
+     */
+    public function verifyResetCode(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|string|size:6',
+        ]);
+
+        $record = EmailVerification::where('email', $data['email'])
+            ->where('code', $data['code'])
+            ->where('expires_at', '>', now())
+            ->where('verified', false)
+            ->first();
+
+        if (! $record) {
+            throw ValidationException::withMessages([
+                'code' => ['Code invalide ou expiré.'],
+            ]);
+        }
+
+        return response()->json(['message' => 'Code valide.', 'valid' => true]);
+    }
+
+    /**
+     * Réinitialise le mot de passe : email + code + nouveau mot de passe.
+     * Consomme le code, révoque les anciens tokens (sécurité) et retourne un
+     * nouveau token (connexion automatique après réinitialisation).
+     */
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|string|size:6',
+            'password' => 'required|string|min:8|confirmed',
+            'device_name' => 'nullable|string|max:255',
+        ]);
+
+        $record = EmailVerification::where('email', $data['email'])
+            ->where('code', $data['code'])
+            ->where('expires_at', '>', now())
+            ->where('verified', false)
+            ->first();
+
+        if (! $record) {
+            throw ValidationException::withMessages([
+                'code' => ['Code invalide ou expiré.'],
+            ]);
+        }
+
+        $user = User::where('email', $data['email'])->first();
+        if (! $user) {
+            throw ValidationException::withMessages([
+                'email' => ['Aucun compte associé à cet email.'],
+            ]);
+        }
+
+        if (! $user->is_active) {
+            return response()->json([
+                'message' => 'Ce compte a été suspendu. Contactez le support.',
+            ], 403);
+        }
+
+        $user->forceFill(['password' => Hash::make($data['password'])])->save();
+        $record->update(['verified' => true]);
+
+        // Révoque toutes les sessions existantes : après un reset, on déconnecte
+        // les autres appareils par sécurité.
+        $user->tokens()->delete();
+
+        $deviceName = $data['device_name'] ?? ($request->userAgent() ?: 'api');
+        $token = $user->createToken($deviceName)->plainTextToken;
+
+        return response()->json([
+            'user' => $user,
+            'token' => $token,
+            'token_type' => 'Bearer',
+            'message' => 'Mot de passe réinitialisé avec succès.',
+        ]);
+    }
+
+    /**
      * Profil de l'utilisateur courant. On inclut pays + devise (avec leurs
      * métadonnées) pour que l'app sache quelle devise utiliser pour
      * l'affichage des prix.
