@@ -30,6 +30,8 @@ class AuthApiController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
+            // Numéro (avec indicatif) — saisi à l'inscription pour l'OTP futur.
+            'phone' => 'nullable|string|max:32',
             'country_code' => 'required|string|size:2|exists:countries,code',
             'currency_code' => 'nullable|string|size:3|exists:currencies,code',
         ]);
@@ -40,6 +42,7 @@ class AuthApiController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
+            'phone' => $data['phone'] ?? null,
             'role' => 'user',
             'country_code' => $locale['country_code'],
             'currency_code' => $locale['currency_code'],
