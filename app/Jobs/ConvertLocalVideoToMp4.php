@@ -62,7 +62,8 @@ class ConvertLocalVideoToMp4 implements ShouldQueue
             return; // déjà en MP4
         }
 
-        $absolute = Storage::disk('public')->path($model->video_path);
+        // Disque PRIVÉ (storage/app/private/videos) : où vivent les vidéos locales.
+        $absolute = Storage::disk('local')->path($model->video_path);
         if (! is_file($absolute)) {
             Log::warning('[ConvertLocalVideoToMp4] Fichier local absent', [
                 'type' => $this->modelType,
@@ -89,8 +90,13 @@ class ConvertLocalVideoToMp4 implements ShouldQueue
             return;
         }
 
-        $newRelative = 'uploads/' . basename($newAbsolute);
+        $oldRelative = $model->video_path;
+        $newRelative = 'videos/' . basename($newAbsolute);
         $model->update(['video_path' => $newRelative]);
+
+        // Resynchronise l'upload d'origine (le picker/la liste retrouvent le MP4).
+        \App\Models\BunnyUpload::where('local_path', $oldRelative)
+            ->update(['local_path' => $newRelative, 'temp_path' => $newAbsolute]);
 
         // Supprime l'ancien fichier non-MP4 (remplacé par le .mp4).
         if ($newAbsolute !== $absolute && is_file($absolute)) {
