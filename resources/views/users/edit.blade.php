@@ -21,7 +21,9 @@
         </div>
     </div>
 
-    <form action="{{ route('users.update', $user) }}" method="POST">
+    <form action="{{ route('users.update', $user) }}" method="POST"
+          data-confirm="Enregistrer les nouvelles informations de « {{ $user->name }} » ?"
+          data-confirm-type="primary" data-confirm-title="Enregistrer les modifications" data-confirm-confirm="Enregistrer">
         @csrf
         @method('PUT')
 

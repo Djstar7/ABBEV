@@ -93,14 +93,16 @@
                                         <i class="fas fa-eye text-xs"></i>
                                     </a>
                                     <form action="{{ route('producers.resend', $producer) }}" method="POST" class="inline"
-                                          onsubmit="return confirm('Régénérer un nouveau mot de passe et l\'envoyer par email à {{ $producer->email }} ? L\'ancien mot de passe sera invalidé.')">
+                                          data-confirm="Régénérer un nouveau mot de passe et l'envoyer par email à {{ $producer->email }} ? L'ancien mot de passe sera invalidé."
+                                          data-confirm-type="primary" data-confirm-confirm="Renvoyer">
                                         @csrf
                                         <button type="submit" class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-primary-500/30 text-primary-300" title="Renvoyer les identifiants par email">
                                             <i class="fas fa-paper-plane text-xs"></i>
                                         </button>
                                     </form>
                                     <form action="{{ route('producers.destroy', $producer) }}" method="POST" class="inline"
-                                          onsubmit="return confirm('Supprimer ce producteur ? Ses contenus restent dans le catalogue, sans propriétaire.')">
+                                          data-confirm="Supprimer ce producteur ? Ses contenus restent dans le catalogue, sans propriétaire."
+                                          data-confirm-type="danger" data-confirm-title="Supprimer le producteur" data-confirm-confirm="Supprimer">
                                         @csrf @method('DELETE')
                                         <button type="submit" class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-red-500/30 text-red-300" title="Supprimer">
                                             <i class="fas fa-trash text-xs"></i>

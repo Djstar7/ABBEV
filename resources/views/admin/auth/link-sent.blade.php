@@ -58,10 +58,6 @@
             </div>
         </div>
 
-        <div class="sent-icon">
-            <i class="fas fa-paper-plane"></i>
-        </div>
-
         <div class="auth-header" style="text-align: center;">
             <h2>Vérifiez votre boîte mail</h2>
             <p style="margin-bottom: 4px;">

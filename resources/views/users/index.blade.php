@@ -130,7 +130,9 @@
 
                             @can('updateStatus', $user)
                             <form action="{{ route('users.status', $user) }}" method="POST" class="inline"
-                                  onsubmit="return confirm('{{ $user->is_active ? 'Suspendre' : 'Réactiver' }} le compte de « {{ $user->name }} » ?')">
+                                  data-confirm="{{ $user->is_active ? 'Suspendre' : 'Réactiver' }} le compte de « {{ $user->name }} » ?"
+                                  data-confirm-type="{{ $user->is_active ? 'warning' : 'primary' }}"
+                                  data-confirm-confirm="{{ $user->is_active ? 'Suspendre' : 'Réactiver' }}">
                                 @csrf @method('PATCH')
                                 <input type="hidden" name="is_active" value="{{ $user->is_active ? 0 : 1 }}">
                                 @if($user->is_active)
@@ -149,7 +151,8 @@
 
                             @can('resetPassword', $user)
                             <form action="{{ route('users.resetPassword', $user) }}" method="POST" class="inline"
-                                  onsubmit="return confirm('Régénérer le mot de passe de « {{ $user->name }} » et le lui envoyer par email ?')">
+                                  data-confirm="Régénérer le mot de passe de « {{ $user->name }} » et le lui envoyer par email ?"
+                                  data-confirm-type="primary" data-confirm-confirm="Réinitialiser">
                                 @csrf
                                 <button type="submit" title="Réinitialiser le mot de passe"
                                         class="w-9 h-9 inline-flex items-center justify-center bg-sky-500/20 hover:bg-sky-500 text-sky-400 hover:text-white rounded-lg text-sm transition">
@@ -160,7 +163,8 @@
 
                             @can('delete', $user)
                             <form action="{{ route('users.destroy', $user) }}" method="POST"
-                                  onsubmit="return confirm('Supprimer définitivement l\'utilisateur « {{ $user->name }} » ({{ $user->email }}) ?\n\nCette action est irréversible.');"
+                                  data-confirm="Supprimer définitivement l'utilisateur « {{ $user->name }} » ({{ $user->email }}) ? Cette action est irréversible."
+                                  data-confirm-type="danger" data-confirm-title="Supprimer l'utilisateur" data-confirm-confirm="Supprimer"
                                   class="inline">
                                 @csrf
                                 @method('DELETE')

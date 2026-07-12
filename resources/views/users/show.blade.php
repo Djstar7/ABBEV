@@ -20,7 +20,9 @@
 
         @can('updateStatus', $user)
         <form action="{{ route('users.status', $user) }}" method="POST"
-              onsubmit="return confirm('{{ $user->is_active ? 'Suspendre' : 'Réactiver' }} le compte de « {{ $user->name }} » ?')">
+              data-confirm="{{ $user->is_active ? 'Suspendre' : 'Réactiver' }} le compte de « {{ $user->name }} » ?"
+              data-confirm-type="{{ $user->is_active ? 'warning' : 'primary' }}"
+              data-confirm-confirm="{{ $user->is_active ? 'Suspendre' : 'Réactiver' }}">
             @csrf @method('PATCH')
             <input type="hidden" name="is_active" value="{{ $user->is_active ? 0 : 1 }}">
             @if($user->is_active)
@@ -37,7 +39,8 @@
 
         @can('resetPassword', $user)
         <form action="{{ route('users.resetPassword', $user) }}" method="POST"
-              onsubmit="return confirm('Régénérer le mot de passe de « {{ $user->name }} » et le lui envoyer par email ?')">
+              data-confirm="Régénérer le mot de passe de « {{ $user->name }} » et le lui envoyer par email ?"
+              data-confirm-type="primary" data-confirm-confirm="Réinitialiser">
             @csrf
             <button type="submit" class="bg-sky-500/20 hover:bg-sky-500 text-sky-400 hover:text-white px-4 py-2 rounded-lg text-sm transition">
                 <i class="fas fa-key mr-1"></i> Réinit. mot de passe
@@ -48,7 +51,8 @@
         @can('delete', $user)
         @if($user->role === 'user')
         <form action="{{ route('users.destroy', $user) }}" method="POST"
-              onsubmit="return confirm('Supprimer définitivement l\'utilisateur « {{ $user->name }} » ({{ $user->email }}) ?\n\nCette action est irréversible et supprimera toutes ses données associées.');">
+              data-confirm="Supprimer définitivement l'utilisateur « {{ $user->name }} » ({{ $user->email }}) ? Cette action est irréversible et supprimera toutes ses données associées."
+              data-confirm-type="danger" data-confirm-title="Supprimer l'utilisateur" data-confirm-confirm="Supprimer">
             @csrf @method('DELETE')
             <button type="submit"
                     class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-4 py-2 rounded-lg text-sm transition">
@@ -175,7 +179,8 @@
             </button>
         </form>
         <form action="{{ route('users.subscription.cancel', [$user, $activeSubscription]) }}" method="POST"
-              onsubmit="return confirm('Annuler l\'abonnement actif de « {{ $user->name }} » ? Son accès sera révoqué.')">
+              data-confirm="Annuler l'abonnement actif de « {{ $user->name }} » ? Son accès sera révoqué."
+              data-confirm-type="danger" data-confirm-title="Annuler l'abonnement" data-confirm-confirm="Annuler l'abonnement">
             @csrf @method('DELETE')
             <button type="submit" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-4 py-2 rounded-lg text-sm transition">
                 <i class="fas fa-xmark mr-1"></i> Annuler l'abonnement

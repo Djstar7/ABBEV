@@ -134,6 +134,49 @@
             #abbev-nav-overlay .ring::after, #abbev-nav-overlay .label,
             main.abbev-nav-fade { animation: none; }
         }
+
+        /* ====== Modal de confirmation ABBEV (remplace window.confirm) ====== */
+        #abbev-confirm {
+            position: fixed; inset: 0; z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px; opacity: 0; visibility: hidden;
+            background: rgba(0,0,0,.65); backdrop-filter: blur(3px);
+            transition: opacity .2s ease, visibility .2s ease;
+        }
+        #abbev-confirm.is-open { opacity: 1; visibility: visible; }
+        #abbev-confirm .cm-box {
+            width: 100%; max-width: 420px;
+            background: #18181b; border: 1px solid #27272a; border-radius: 18px;
+            box-shadow: 0 24px 60px rgba(0,0,0,.5);
+            padding: 28px 26px; text-align: center;
+            transform: translateY(10px) scale(.97);
+            transition: transform .2s ease;
+        }
+        #abbev-confirm.is-open .cm-box { transform: none; }
+        #abbev-confirm .cm-ring {
+            width: 64px; height: 64px; margin: 0 auto 18px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 26px;
+        }
+        .cm-ring-danger  { background: rgba(239,68,68,.12);  border: 1px solid rgba(239,68,68,.35);  color: #f87171; }
+        .cm-ring-warning { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35); color: #fbbf24; }
+        .cm-ring-primary { background: rgba(6,182,212,.12);  border: 1px solid rgba(6,182,212,.35);  color: #22d3ee; }
+        #abbev-confirm .cm-title { font-size: 1.2rem; font-weight: 700; color: #fff; margin-bottom: 8px; }
+        #abbev-confirm .cm-message { font-size: .92rem; color: #a1a1aa; line-height: 1.55; margin-bottom: 24px; white-space: pre-line; }
+        #abbev-confirm .cm-actions { display: flex; gap: 12px; }
+        #abbev-confirm .cm-btn {
+            flex: 1; padding: 12px 18px; border: none; border-radius: 11px;
+            font-size: .92rem; font-weight: 600; cursor: pointer; font-family: inherit;
+            transition: all .2s ease; color: #fff;
+        }
+        .cm-btn-cancel  { background: #27272a; color: #d4d4d8 !important; }
+        .cm-btn-cancel:hover  { background: #3f3f46; }
+        .cm-btn-danger  { background: #ef4444; }
+        .cm-btn-danger:hover  { background: #dc2626; }
+        .cm-btn-warning { background: #f59e0b; }
+        .cm-btn-warning:hover { background: #d97706; }
+        .cm-btn-primary { background: #06b6d4; }
+        .cm-btn-primary:hover { background: #0891b2; }
     </style>
 
     <div id="page-styles">@stack('styles')</div>
@@ -148,6 +191,23 @@
                 <span class="logo"><img src="{{ asset('logo/logo.jpeg') }}" alt=""></span>
             </div>
             <span class="label">Chargement…</span>
+        </div>
+    </div>
+
+    {{-- Modal de confirmation ABBEV : remplace window.confirm(). Déclenchée par
+         tout formulaire portant l'attribut data-confirm (+ options data-confirm-type
+         « danger|warning|primary », data-confirm-title, data-confirm-confirm). --}}
+    <div id="abbev-confirm" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="cm-box">
+            <div class="cm-ring cm-ring-danger" data-cm-ringwrap>
+                <i class="fas fa-triangle-exclamation" data-cm-icon></i>
+            </div>
+            <h3 class="cm-title" data-cm-title>Confirmer l'action</h3>
+            <p class="cm-message" data-cm-message></p>
+            <div class="cm-actions">
+                <button type="button" class="cm-btn cm-btn-cancel" data-cm-cancel>Annuler</button>
+                <button type="button" class="cm-btn cm-btn-danger" data-cm-confirm>Confirmer</button>
+            </div>
         </div>
     </div>
 
@@ -648,6 +708,58 @@
                 pjax(u.href);
             }catch(ex){}
         },true);
+
+        /* ====== Modal de confirmation (remplace window.confirm) ====== */
+        const ConfirmModal = (function(){
+            const root = document.getElementById('abbev-confirm');
+            if(!root) return null;
+            const elTitle = root.querySelector('[data-cm-title]');
+            const elMsg   = root.querySelector('[data-cm-message]');
+            const elIcon  = root.querySelector('[data-cm-icon]');
+            const elRing  = root.querySelector('[data-cm-ringwrap]');
+            const elOk    = root.querySelector('[data-cm-confirm]');
+            const elNo    = root.querySelector('[data-cm-cancel]');
+            const TYPES = {
+                danger:  { icon:'fa-triangle-exclamation', ring:'cm-ring-danger',  btn:'cm-btn-danger'  },
+                warning: { icon:'fa-circle-exclamation',   ring:'cm-ring-warning', btn:'cm-btn-warning' },
+                primary: { icon:'fa-circle-question',      ring:'cm-ring-primary', btn:'cm-btn-primary' },
+            };
+            let pending = null;
+            function open(form){
+                pending = form;
+                const t = TYPES[form.getAttribute('data-confirm-type')] || TYPES.danger;
+                elTitle.textContent = form.getAttribute('data-confirm-title') || "Confirmer l'action";
+                elMsg.textContent   = form.getAttribute('data-confirm') || 'Confirmer cette action ?';
+                elOk.textContent    = form.getAttribute('data-confirm-confirm') || 'Confirmer';
+                elIcon.className = 'fas ' + t.icon;
+                elRing.className = 'cm-ring ' + t.ring;
+                elOk.className   = 'cm-btn ' + t.btn;
+                root.classList.add('is-open');
+                document.body.style.overflow = 'hidden';
+                setTimeout(()=>elOk.focus(), 60);
+            }
+            function close(){ root.classList.remove('is-open'); document.body.style.overflow=''; pending=null; }
+            elOk.addEventListener('click',()=>{
+                if(!pending) return close();
+                const f = pending; f.dataset.confirmed = '1'; close();
+                if(typeof f.requestSubmit === 'function') f.requestSubmit(); else f.submit();
+            });
+            elNo.addEventListener('click', close);
+            root.addEventListener('click',(e)=>{ if(e.target===root) close(); });
+            document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && root.classList.contains('is-open')) close(); });
+            return { open };
+        })();
+
+        // Intercepte les soumissions à confirmer AVANT le loader/PJAX.
+        document.addEventListener('submit',(e)=>{
+            const f = e.target;
+            if(!f || !f.hasAttribute('data-confirm') || !ConfirmModal) return;
+            if(f.dataset.confirmed === '1'){ delete f.dataset.confirmed; return; }
+            // Formulaire invalide (champs requis) → on laisse la validation navigateur.
+            if(typeof f.checkValidity === 'function' && !f.checkValidity()) return;
+            e.preventDefault(); e.stopImmediatePropagation();
+            ConfirmModal.open(f);
+        }, true);
 
         // Interception des formulaires GET (recherche, filtres)
         document.addEventListener('submit',(e)=>{

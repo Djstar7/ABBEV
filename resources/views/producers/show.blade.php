@@ -12,14 +12,16 @@
 
     <div class="flex flex-wrap items-center gap-2">
         <form action="{{ route('producers.resend', $user) }}" method="POST" class="inline"
-              onsubmit="return confirm('Régénérer un nouveau mot de passe et l\'envoyer par email à {{ $user->email }} ? L\'ancien sera invalidé.')">
+              data-confirm="Régénérer un nouveau mot de passe et l'envoyer par email à {{ $user->email }} ? L'ancien sera invalidé."
+              data-confirm-type="primary" data-confirm-confirm="Renvoyer">
             @csrf
             <button type="submit" class="bg-sky-500/20 hover:bg-sky-500 text-sky-400 hover:text-white px-4 py-2 rounded-lg text-sm transition">
                 <i class="fas fa-paper-plane mr-1"></i> Renvoyer les identifiants
             </button>
         </form>
         <form action="{{ route('producers.destroy', $user) }}" method="POST" class="inline"
-              onsubmit="return confirm('Supprimer ce producteur ? Ses contenus restent dans le catalogue, sans propriétaire.')">
+              data-confirm="Supprimer ce producteur ? Ses contenus restent dans le catalogue, sans propriétaire."
+              data-confirm-type="danger" data-confirm-title="Supprimer le producteur" data-confirm-confirm="Supprimer">
             @csrf @method('DELETE')
             <button type="submit" class="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-4 py-2 rounded-lg text-sm transition">
                 <i class="fas fa-trash mr-1"></i> Supprimer

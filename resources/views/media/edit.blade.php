@@ -242,7 +242,8 @@
                                     <i class="fas fa-plus mr-1"></i> Épisode
                                 </a>
                                 <form action="{{ route('episodes.season.destroy', $season) }}" method="POST"
-                                      onsubmit="return confirm('Supprimer la saison {{ $season->season_number }} et tous ses épisodes ?')">
+                                      data-confirm="Supprimer la saison {{ $season->season_number }} et tous ses épisodes ?"
+                                      data-confirm-type="danger" data-confirm-title="Supprimer la saison" data-confirm-confirm="Supprimer">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit"
@@ -268,7 +269,8 @@
                                                     <i class="fas fa-edit"></i>
                                                 </a>
                                                 <form action="{{ route('episodes.destroy', $episode) }}" method="POST"
-                                                      onsubmit="return confirm('Supprimer cet épisode ?')" class="inline">
+                                                      data-confirm="Supprimer cet épisode ?"
+                                                      data-confirm-type="danger" data-confirm-confirm="Supprimer" class="inline">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit"
