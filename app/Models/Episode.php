@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Concerns\HasObfuscatedRouteKey;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Episode extends Model
 {
+    use HasObfuscatedRouteKey;
+
     protected $fillable = [
         'season_id',
         'episode_number',
