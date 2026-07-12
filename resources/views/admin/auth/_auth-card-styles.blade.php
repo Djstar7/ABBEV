@@ -92,6 +92,22 @@
     .input-wrapper { position: relative; }
     .input-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--dark-500); font-size: 18px; }
 
+    /* Champ en lecture seule (non modifiable) : email pré-rempli sur la page reset */
+    .static-field {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 14px 16px;
+        border: 2px solid var(--dark-200);
+        border-radius: 12px;
+        background: rgba(6, 182, 212, 0.05);
+        color: var(--dark-700);
+        font-size: 1rem;
+        word-break: break-all;
+    }
+    .static-field i { color: var(--primary); font-size: 18px; flex-shrink: 0; }
+
     input[type="email"], input[type="password"], input[type="text"] {
         width: 100%;
         padding: 14px 16px 14px 50px;

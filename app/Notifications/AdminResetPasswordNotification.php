@@ -35,11 +35,9 @@ class AdminResetPasswordNotification extends Notification
 
         return (new MailMessage)
             ->subject('Réinitialisation de votre mot de passe — ABBEV')
-            ->greeting('Bonjour,')
-            ->line('Vous recevez cet email car une réinitialisation du mot de passe de votre compte ABBEV a été demandée.')
-            ->action('Réinitialiser mon mot de passe', $url)
-            ->line("Ce lien expirera dans {$expire} minutes.")
-            ->line("Si vous n'êtes pas à l'origine de cette demande, aucune action n'est requise — ignorez simplement cet email.")
-            ->salutation("L'équipe ABBEV");
+            ->view('emails.reset-password', [
+                'url'    => $url,
+                'expire' => $expire,
+            ]);
     }
 }

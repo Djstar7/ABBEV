@@ -25,7 +25,8 @@ class AdminPasswordResetTest extends TestCase
 
         $res = $this->post(route('admin.password.email'), ['email' => 'admin@abbev.tv']);
 
-        $res->assertSessionHas('status');
+        $res->assertRedirect(route('admin.password.sent'));
+        $res->assertSessionHas('reset_email', 'admin@abbev.tv');
         Notification::assertSentTo($admin, AdminResetPasswordNotification::class);
     }
 
@@ -46,8 +47,8 @@ class AdminPasswordResetTest extends TestCase
 
         $res = $this->post(route('admin.password.email'), ['email' => 'mobile@abbev.tv']);
 
-        // Message générique (anti-énumération) mais AUCUN email envoyé.
-        $res->assertSessionHas('status');
+        // Même écran de confirmation (anti-énumération) mais AUCUN email envoyé.
+        $res->assertRedirect(route('admin.password.sent'));
         Notification::assertNothingSent();
     }
 
@@ -57,8 +58,25 @@ class AdminPasswordResetTest extends TestCase
 
         $res = $this->post(route('admin.password.email'), ['email' => 'inconnu@abbev.tv']);
 
-        $res->assertSessionHas('status');
+        $res->assertRedirect(route('admin.password.sent'));
         Notification::assertNothingSent();
+    }
+
+    public function test_ecran_confirmation_affiche_email_et_expiration(): void
+    {
+        $res = $this->withSession(['reset_email' => 'admin@abbev.tv'])
+            ->get(route('admin.password.sent'));
+
+        $res->assertOk();
+        $res->assertSee('admin@abbev.tv');
+        $res->assertSee('Vérifiez votre boîte mail');
+    }
+
+    public function test_ecran_confirmation_redirige_sans_demande(): void
+    {
+        $res = $this->get(route('admin.password.sent'));
+
+        $res->assertRedirect(route('admin.password.request'));
     }
 
     public function test_reinitialisation_avec_token_valide_change_le_mot_de_passe(): void
@@ -102,9 +120,10 @@ class AdminPasswordResetTest extends TestCase
         $notification = new AdminResetPasswordNotification('un-token-de-test');
 
         $mail = $notification->toMail($admin);
-        $actionUrl = $mail->actionUrl;
+        $url = $mail->viewData['url'] ?? '';
 
-        $this->assertStringContainsString('/admin/reset-password/un-token-de-test', $actionUrl);
-        $this->assertStringContainsString('email=link%40abbev.tv', $actionUrl);
+        $this->assertSame('emails.reset-password', $mail->view);
+        $this->assertStringContainsString('/admin/reset-password/un-token-de-test', $url);
+        $this->assertStringContainsString('email=link%40abbev.tv', $url);
     }
 }

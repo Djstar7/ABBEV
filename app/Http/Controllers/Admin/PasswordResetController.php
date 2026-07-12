@@ -20,8 +20,6 @@ use Illuminate\Validation\Rules\Password as PasswordRule;
  */
 class PasswordResetController extends Controller
 {
-    private const GENERIC_STATUS = "Si un compte administrateur existe pour cette adresse, un lien de réinitialisation vient d'être envoyé.";
-
     public function showLinkRequest()
     {
         return view('admin.auth.forgot-password');
@@ -33,21 +31,39 @@ class PasswordResetController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        // Non-staff ou inexistant : on ne divulgue rien, message générique.
-        if (! $user || ! $user->isStaff()) {
-            return back()->with('status', self::GENERIC_STATUS);
+        // On n'envoie réellement le lien qu'au staff (admin/producteur). Pour un
+        // email non-staff ou inexistant, on n'envoie rien mais on affiche le
+        // MÊME écran de confirmation (anti-énumération : ne pas révéler qui existe).
+        if ($user && $user->isStaff()) {
+            $status = Password::sendResetLink($request->only('email'));
+
+            // Throttle : on renvoie l'erreur réelle (utile) sur le formulaire.
+            if ($status === Password::RESET_THROTTLED) {
+                return back()->withErrors([
+                    'email' => 'Trop de tentatives. Patientez avant de redemander un lien.',
+                ])->onlyInput('email');
+            }
         }
 
-        $status = Password::sendResetLink($request->only('email'));
+        return redirect()->route('admin.password.sent')->with('reset_email', $request->email);
+    }
 
-        // Throttle : on renvoie l'erreur réelle (utile), sinon message générique.
-        if ($status === Password::RESET_THROTTLED) {
-            return back()->withErrors([
-                'email' => 'Trop de tentatives. Patientez avant de redemander un lien.',
-            ])->onlyInput('email');
+    /**
+     * Écran de confirmation : « le lien a été envoyé à …, il expire dans … ».
+     * Nécessite le flash reset_email (posé par sendResetLink), sinon on renvoie
+     * vers le formulaire (empêche l'accès direct sans avoir fait de demande).
+     */
+    public function linkSent()
+    {
+        $email = session('reset_email');
+
+        if (! $email) {
+            return redirect()->route('admin.password.request');
         }
 
-        return back()->with('status', self::GENERIC_STATUS);
+        $expire = config('auth.passwords.'.config('auth.defaults.passwords', 'users').'.expire', 60);
+
+        return view('admin.auth.link-sent', compact('email', 'expire'));
     }
 
     public function showReset(Request $request, string $token)

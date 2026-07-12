@@ -39,13 +39,13 @@
         <form method="POST" action="{{ route('admin.password.update') }}">
             @csrf
             <input type="hidden" name="token" value="{{ $token }}">
+            <input type="hidden" name="email" value="{{ old('email', $email) }}">
 
             <div class="form-group">
-                <label for="email">Adresse email</label>
-                <div class="input-wrapper">
-                    <input type="email" id="email" name="email" value="{{ old('email', $email) }}"
-                           placeholder="admin@example.com" required autofocus>
-                    <i class="fas fa-envelope input-icon"></i>
+                <label>Adresse email</label>
+                <div class="static-field">
+                    <i class="fas fa-envelope"></i>
+                    <span>{{ old('email', $email) }}</span>
                 </div>
             </div>
 
@@ -53,7 +53,7 @@
                 <label for="password">Nouveau mot de passe</label>
                 <div class="input-wrapper">
                     <input type="password" id="password" name="password"
-                           placeholder="Au moins 8 caractères" required>
+                           placeholder="Au moins 8 caractères" required autofocus>
                     <i class="fas fa-lock input-icon"></i>
                 </div>
             </div>

@@ -29,6 +29,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     // Récupération de mot de passe (dashboard web uniquement — le mobile utilise l'OTP)
     Route::get('/forgot-password', [App\Http\Controllers\Admin\PasswordResetController::class, 'showLinkRequest'])->name('password.request');
     Route::post('/forgot-password', [App\Http\Controllers\Admin\PasswordResetController::class, 'sendResetLink'])->name('password.email');
+    Route::get('/forgot-password/envoye', [App\Http\Controllers\Admin\PasswordResetController::class, 'linkSent'])->name('password.sent');
     Route::get('/reset-password/{token}', [App\Http\Controllers\Admin\PasswordResetController::class, 'showReset'])->name('password.reset');
     Route::post('/reset-password', [App\Http\Controllers\Admin\PasswordResetController::class, 'reset'])->name('password.update');
 
