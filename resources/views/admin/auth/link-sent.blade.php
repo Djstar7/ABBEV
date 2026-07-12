@@ -48,6 +48,16 @@
 </head>
 <body>
     <div class="auth-card" style="text-align: center;">
+        <div class="auth-logo" style="justify-content: center; margin-bottom: 26px;">
+            <div class="auth-logo-circle">
+                <img src="{{ asset('logo/logo.jpeg') }}" alt="ABBEV Logo">
+            </div>
+            <div style="text-align: left;">
+                <h1>ABBEV</h1>
+                <p>Administration</p>
+            </div>
+        </div>
+
         <div class="sent-icon">
             <i class="fas fa-paper-plane"></i>
         </div>
