@@ -98,7 +98,13 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     // Utilisateurs (abonnés)
     Route::get('/users', [App\Http\Controllers\UserController::class, 'index'])->name('users.index');
+    Route::get('/users/{user}/edit', [App\Http\Controllers\UserController::class, 'edit'])->name('users.edit');
     Route::get('/users/{user}', [App\Http\Controllers\UserController::class, 'show'])->name('users.show');
+    Route::put('/users/{user}', [App\Http\Controllers\UserController::class, 'update'])->name('users.update');
+    Route::patch('/users/{user}/status', [App\Http\Controllers\UserController::class, 'updateStatus'])->name('users.status');
+    Route::post('/users/{user}/reset-password', [App\Http\Controllers\UserController::class, 'resetPassword'])->name('users.resetPassword');
+    Route::post('/users/{user}/subscription/extend', [App\Http\Controllers\UserController::class, 'extendSubscription'])->name('users.subscription.extend');
+    Route::delete('/users/{user}/subscription/{subscription}', [App\Http\Controllers\UserController::class, 'cancelSubscription'])->name('users.subscription.cancel');
     Route::delete('/users/{user}', [App\Http\Controllers\UserController::class, 'destroy'])->name('users.destroy');
 
     // Administrateurs

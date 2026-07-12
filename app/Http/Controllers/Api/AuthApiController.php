@@ -259,6 +259,13 @@ class AuthApiController extends Controller
             ])->save();
         }
 
+        // Compte suspendu par un admin → accès refusé (aucun token émis).
+        if (! $user->is_active) {
+            return response()->json([
+                'message' => 'Ce compte a été suspendu. Contactez le support.',
+            ], 403);
+        }
+
         if (is_null($user->email_verified_at)) {
             $user->forceFill(['email_verified_at' => now()])->save();
         }
