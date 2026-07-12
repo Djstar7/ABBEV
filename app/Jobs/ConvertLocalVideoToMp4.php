@@ -39,8 +39,10 @@ class ConvertLocalVideoToMp4 implements ShouldQueue
      */
     public function __construct(public string $modelType, public int $modelId)
     {
-        $this->onConnection('bunny');
-        $this->onQueue('bunny');
+        // File dédiée « transcode » : l'encodage ffmpeg (long, CPU) ne doit pas
+        // bloquer les transferts réseau de la file « bunny ».
+        $this->onConnection('transcode');
+        $this->onQueue('transcode');
     }
 
     public function handle(VideoTranscoder $transcoder): void

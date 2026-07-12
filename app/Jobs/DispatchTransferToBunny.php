@@ -293,21 +293,6 @@ class DispatchTransferToBunny implements ShouldQueue
 
         File::deleteDirectory($chunkDir);
 
-        // Conversion en MP4 (H.264/AAC) si le fichier n'est pas déjà lisible
-        // partout : une vidéo .webm ne se lit ni sur iOS ni sur Safari, en
-        // streaming comme en téléchargement. On garde le .mp4 comme copie
-        // locale de référence. Dégrade proprement si ffmpeg est absent (on
-        // conserve alors le fichier d'origine).
-        if (\App\Services\VideoTranscoder::needsTranscode($absolutePath)) {
-            $mp4 = app(\App\Services\VideoTranscoder::class)->toMp4($absolutePath);
-            if ($mp4 !== null && $mp4 !== $absolutePath) {
-                @unlink($absolutePath); // on remplace l'original non-MP4
-                $absolutePath = $mp4;
-                $name = basename($mp4);
-                $relativePath = 'videos/' . $name;
-            }
-        }
-
         $upload->update([
             'temp_path'      => $absolutePath,
             'local_path'     => $relativePath,
@@ -316,6 +301,17 @@ class DispatchTransferToBunny implements ShouldQueue
         ]);
 
         Cache::forget('bunny.videos.all'); // dispo immédiate dans le picker (local)
+
+        // Conversion MP4 (H.264/AAC) DÉCOUPLÉE : une vidéo .webm ne se lit ni sur
+        // iOS ni sur Safari. On la convertit sur une file séparée « transcode »
+        // pour ne PAS bloquer ce worker (ni les transferts des autres users)
+        // pendant les minutes d'encodage ffmpeg. La vidéo est déjà « dispo en
+        // local » ci-dessus ; le MP4 iPhone la remplacera dès l'encodage fini.
+        // ffmpeg écrit un nouveau fichier et ne supprime l'original qu'à la fin :
+        // un PUT Bunny en cours (file bunny) n'est pas gêné.
+        if (\App\Services\VideoTranscoder::needsTranscode($absolutePath)) {
+            TranscodeBunnyUpload::dispatch($upload->id);
+        }
     }
 
     /**
