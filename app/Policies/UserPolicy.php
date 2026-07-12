@@ -14,6 +14,12 @@ use App\Models\User;
  */
 class UserPolicy
 {
+    /** Créer un compte utilisateur depuis le dashboard. */
+    public function create(User $actor): bool
+    {
+        return $actor->isAdmin();
+    }
+
     /** Éditer les infos de base (nom, email). */
     public function update(User $actor, User $target): bool
     {

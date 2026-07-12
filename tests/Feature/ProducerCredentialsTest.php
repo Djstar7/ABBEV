@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Mail\ProducerCredentialsMail;
+use App\Models\Category;
+use App\Models\Media;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -106,5 +108,38 @@ class ProducerCredentialsTest extends TestCase
 
         $res->assertSessionHas('error');
         Mail::assertNothingSent();
+    }
+
+    public function test_fiche_producteur_liste_ses_contenus(): void
+    {
+        $admin = $this->admin();
+        $producer = User::factory()->create(['role' => 'producer', 'name' => 'Studio X']);
+        $category = Category::firstOrCreate(['slug' => 'action'], ['name' => 'Action']);
+
+        Media::create([
+            'category_id'    => $category->id,
+            'user_id'        => $producer->id,
+            'title'          => 'Mon Super Film',
+            'slug'           => 'mon-super-film',
+            'type'           => 'movie',
+            'video_provider' => 'local',
+        ]);
+
+        $res = $this->actingAs($admin)->get(route('producers.show', $producer));
+
+        $res->assertOk();
+        $res->assertSee('Studio X');
+        $res->assertSee('Mon Super Film');
+    }
+
+    public function test_fiche_producteur_refuse_un_non_producteur(): void
+    {
+        $admin = $this->admin();
+        $membre = User::factory()->create(['role' => 'user']);
+
+        $res = $this->actingAs($admin)->get(route('producers.show', $membre));
+
+        $res->assertRedirect(route('producers.index'));
+        $res->assertSessionHas('error');
     }
 }

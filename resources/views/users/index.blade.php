@@ -55,23 +55,31 @@
     </div>
 </div>
 
-<!-- Search Bar -->
+<!-- Search Bar + Ajouter -->
 <div class="bg-dark-100 rounded-xl shadow-lg border border-dark-200 p-4 mb-6">
-    <form action="{{ route('users.index') }}" method="GET" class="flex gap-4">
-        <div class="flex-1">
-            <input type="text" name="search" value="{{ request('search') }}"
-                   placeholder="Rechercher par nom ou email..."
-                   class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary-500">
-        </div>
-        <button type="submit" class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg transition">
-            <i class="fas fa-search mr-2"></i> Rechercher
-        </button>
-        @if(request('search'))
-        <a href="{{ route('users.index') }}" class="bg-dark-200 hover:bg-dark-300 text-white px-6 py-2 rounded-lg transition">
-            <i class="fas fa-times"></i>
+    <div class="flex flex-col md:flex-row gap-4 md:items-center">
+        <form action="{{ route('users.index') }}" method="GET" class="flex gap-4 flex-1">
+            <div class="flex-1">
+                <input type="text" name="search" value="{{ request('search') }}"
+                       placeholder="Rechercher par nom ou email..."
+                       class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary-500">
+            </div>
+            <button type="submit" class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg transition">
+                <i class="fas fa-search mr-2"></i> Rechercher
+            </button>
+            @if(request('search'))
+            <a href="{{ route('users.index') }}" class="bg-dark-200 hover:bg-dark-300 text-white px-6 py-2 rounded-lg transition">
+                <i class="fas fa-times"></i>
+            </a>
+            @endif
+        </form>
+        @can('create', App\Models\User::class)
+        <a href="{{ route('users.create') }}"
+           class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg transition text-center whitespace-nowrap">
+            <i class="fas fa-user-plus mr-2"></i> Ajouter un utilisateur
         </a>
-        @endif
-    </form>
+        @endcan
+    </div>
 </div>
 
 <!-- Users Table -->

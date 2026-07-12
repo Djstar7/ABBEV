@@ -88,6 +88,10 @@
                             <td class="px-6 py-3 text-gray-500">{{ $producer->created_at?->diffForHumans() }}</td>
                             <td class="px-6 py-3 text-right">
                                 <div class="inline-flex items-center gap-2">
+                                    <a href="{{ route('producers.show', $producer) }}" title="Voir la fiche"
+                                       class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-primary-500/30 text-primary-300">
+                                        <i class="fas fa-eye text-xs"></i>
+                                    </a>
                                     <form action="{{ route('producers.resend', $producer) }}" method="POST" class="inline"
                                           onsubmit="return confirm('Régénérer un nouveau mot de passe et l\'envoyer par email à {{ $producer->email }} ? L\'ancien mot de passe sera invalidé.')">
                                         @csrf

@@ -98,6 +98,8 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     // Utilisateurs (abonnés)
     Route::get('/users', [App\Http\Controllers\UserController::class, 'index'])->name('users.index');
+    Route::get('/users/create', [App\Http\Controllers\UserController::class, 'create'])->name('users.create');
+    Route::post('/users', [App\Http\Controllers\UserController::class, 'store'])->name('users.store');
     Route::get('/users/{user}/edit', [App\Http\Controllers\UserController::class, 'edit'])->name('users.edit');
     Route::get('/users/{user}', [App\Http\Controllers\UserController::class, 'show'])->name('users.show');
     Route::put('/users/{user}', [App\Http\Controllers\UserController::class, 'update'])->name('users.update');
@@ -117,6 +119,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::get('/producers', [ProducerController::class, 'index'])->name('producers.index');
     Route::get('/producers/create', [ProducerController::class, 'create'])->name('producers.create');
     Route::post('/producers', [ProducerController::class, 'store'])->name('producers.store');
+    Route::get('/producers/{user}', [ProducerController::class, 'show'])->name('producers.show');
     Route::post('/producers/{user}/resend', [ProducerController::class, 'resend'])->name('producers.resend');
     Route::delete('/producers/{user}', [ProducerController::class, 'destroy'])->name('producers.destroy');
 

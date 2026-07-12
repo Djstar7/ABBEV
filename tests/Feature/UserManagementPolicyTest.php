@@ -64,7 +64,31 @@ class UserManagementPolicyTest extends TestCase
         $this->assertFalse($producer->can('delete', $target));
     }
 
+    public function test_seul_un_admin_peut_creer_un_utilisateur(): void
+    {
+        $this->assertTrue($this->admin()->can('create', User::class));
+        $this->assertFalse(User::factory()->create(['role' => 'producer'])->can('create', User::class));
+        $this->assertFalse($this->member()->can('create', User::class));
+    }
+
     // ---------- Actions HTTP ----------
+
+    public function test_admin_cree_un_membre_standard(): void
+    {
+        $admin = $this->admin();
+
+        $res = $this->actingAs($admin)->post(route('users.store'), [
+            'name'  => 'Jean Membre',
+            'email' => 'jean@abbev.tv',
+        ]);
+
+        $this->assertDatabaseHas('users', [
+            'email'     => 'jean@abbev.tv',
+            'role'      => 'user',
+            'is_active' => true,
+        ]);
+        $res->assertRedirect(route('users.show', User::where('email', 'jean@abbev.tv')->first()));
+    }
 
     public function test_admin_modifie_nom_et_email(): void
     {

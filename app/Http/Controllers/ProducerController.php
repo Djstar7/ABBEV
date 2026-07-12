@@ -35,6 +35,26 @@ class ProducerController extends Controller
         return view('producers.create');
     }
 
+    /** Fiche détaillée d'un producteur : ses contenus (films/séries) + actions. */
+    public function show(User $user)
+    {
+        if ($user->role !== 'producer') {
+            return redirect()->route('producers.index')
+                ->with('error', "Cet utilisateur n'est pas un producteur.");
+        }
+
+        $media = $user->media()->with('category')->latest()->get();
+
+        $stats = [
+            'total'  => $media->count(),
+            'movies' => $media->where('type', 'movie')->count(),
+            'series' => $media->where('type', 'series')->count(),
+            'views'  => (int) $media->sum('views_count'),
+        ];
+
+        return view('producers.show', compact('user', 'media', 'stats'));
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([

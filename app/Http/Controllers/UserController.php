@@ -41,6 +41,40 @@ class UserController extends Controller
         return view('users.index', compact('users', 'stats'));
     }
 
+    /** Formulaire de création d'un utilisateur (membre standard). */
+    public function create()
+    {
+        $this->authorize('create', User::class);
+
+        return view('users.create');
+    }
+
+    /**
+     * Crée un membre standard depuis le dashboard. Le mobile se connecte par
+     * OTP (email) : aucun mot de passe à transmettre, on en pose un aléatoire.
+     */
+    public function store(Request $request)
+    {
+        $this->authorize('create', User::class);
+
+        $validated = $request->validate([
+            'name'  => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+        ]);
+
+        $user = User::create([
+            'name'              => $validated['name'],
+            'email'             => $validated['email'],
+            'password'          => Hash::make(Str::random(32)),
+            'role'              => 'user',
+            'is_active'         => true,
+            'email_verified_at' => now(),
+        ]);
+
+        return redirect()->route('users.show', $user)
+            ->with('success', 'Utilisateur créé. Il peut se connecter à l\'app via un code OTP envoyé à son email.');
+    }
+
     public function show(User $user)
     {
         $user->load('subscriptions.plan');
