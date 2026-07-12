@@ -389,15 +389,18 @@
         if(finished) scheduleReload();
     }, sig);
 
+    // Notification non bloquante (toast ABBEV), avec repli minimal si absent.
+    const toast=(m,t)=>{ if(window.ABBEV&&ABBEV.toast) ABBEV.toast(m,t); else console.log('['+(t||'info')+'] '+m); };
+
     /* ---------- Relancer ---------- */
     async function retryUpload(id){
         try{
             const r=await fetch(`${URL_BASE}/${id}/retry`,{method:'POST',headers:{'X-CSRF-TOKEN':CSRF,'Accept':'application/json'}});
             const d=await r.json();
-            if(!r.ok){alert(d.error||'Relance impossible.');return;}
+            if(!r.ok){toast(d.error||'Relance impossible.','error');return;}
             if(engine) engine.ensurePolling();
             scheduleReload();
-        }catch(e){alert('Erreur réseau à la relance.');}
+        }catch(e){toast('Erreur réseau à la relance.','error');}
     }
     document.addEventListener('click',(e)=>{const b=e.target.closest('[data-retry-row]'); if(b) retryUpload(b.dataset.retryRow);}, sig);
 
@@ -426,8 +429,13 @@
     }
     function afterDelete(d){
         closeDelModal();
+        // Toast récap : les non-supprimées (rattachées à un film/épisode) sont
+        // signalées en toast « info » persistant, plus d'alert() bloquant.
         if(d.skipped&&d.skipped.length){
-            alert(`${d.deleted} supprimée(s).\nNon supprimée(s) :\n`+d.skipped.map(s=>`• ${s.title} — ${s.reason}`).join('\n'));
+            const lignes=d.skipped.map(s=>'• '+s.title+' — '+s.reason).join('\n');
+            toast((d.deleted?d.deleted+' supprimée(s). ':'')+'Non supprimée(s) :\n'+lignes,'info');
+        } else if(d.deleted){
+            toast(d.deleted+' vidéo(s) supprimée(s).','success');
         }
         if(window.ABBEV&&ABBEV.navigate) ABBEV.navigate(location.href);
         else location.reload();
@@ -436,7 +444,7 @@
         if(!pendingIds.length) return;
         delConfirm.disabled=true; delConfirm.innerHTML='<i class="fas fa-spinner fa-spin mr-1.5"></i>Suppression…';
         try{afterDelete(await deleteIds(pendingIds));}
-        catch(d){closeDelModal(); alert(d.message||'Suppression impossible.');}
+        catch(d){closeDelModal(); toast(d.message||'Suppression impossible.','error');}
     },sig);
 
     document.addEventListener('click',(e)=>{const b=e.target.closest('[data-del-row]'); if(b) openDelModal([Number(b.dataset.delRow)]);},sig);
@@ -474,7 +482,7 @@
 
     // Flash après suppression
     const delMsg=sessionStorage.getItem('bunny-del-msg');
-    if(delMsg){sessionStorage.removeItem('bunny-del-msg'); setTimeout(()=>alert(delMsg),150);}
+    if(delMsg){sessionStorage.removeItem('bunny-del-msg'); setTimeout(()=>toast(delMsg,'info'),150);}
 
     refreshSel();
 })();

@@ -553,14 +553,14 @@
                             body: JSON.stringify({filename:f.fileName||f.file.name, size:f.size, identifier:f.uniqueIdentifier}),
                         });
                         const d = await res.json();
-                        if (!res.ok) { alert(d.error||'Démarrage impossible.'); this.r.removeFile(f); return; }
+                        if (!res.ok) { ABBEV.toast(d.error||'Démarrage impossible.','error'); this.r.removeFile(f); return; }
                         f._uid = d.upload_id;
                         this.inFlight++;
                         this.items.set(d.upload_id, {title:f.fileName, progress:0, status:'uploading', size:f.size});
                         this.updateWidget();
                         this.emit('progress',{id:d.upload_id,title:f.fileName,status:'uploading',progress:0,size_bytes:f.size});
                         this.r.upload();
-                    } catch(e) { alert('Erreur réseau.'); this.r.removeFile(f); }
+                    } catch(e) { ABBEV.toast('Erreur réseau.','error'); this.r.removeFile(f); }
                 });
 
                 this.r.on('fileProgress', (f) => {
@@ -591,8 +591,39 @@
 
             connectDropzone(drop, browse) {
                 if (!this.r) return;
-                this.r.assignDrop(drop);
-                this.r.assignBrowse(browse, false, false);
+
+                // Glisser-déposer : lié une seule fois par élément (le PJAX
+                // reconstruit la zone à chaque visite → nouvel élément, pas
+                // d'accumulation ; le flag évite un double-bind sur le même).
+                if (drop && !drop._abbevBound) {
+                    drop._abbevBound = true;
+                    this.r.assignDrop(drop);
+                }
+
+                // Bouton « Choisir des fichiers » : on N'UTILISE PAS
+                // Resumable.assignBrowse — il superpose un <input file> invisible
+                // par-dessus le bouton, et cet overlay se cale mal sur le bouton
+                // reconstruit par le PJAX (le clic tombe parfois à côté → « des
+                // fois ça marche, des fois non »). On câble un input caché dédié,
+                // déterministe : clic bouton → input.click() → dialogue → addFiles.
+                if (browse && !browse._abbevBound) {
+                    browse._abbevBound = true;
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.multiple = true;
+                    input.accept = 'video/*,.mkv,.ts,.m4v,.webm,.avi,.mov';
+                    input.style.display = 'none';
+                    browse.appendChild(input);
+                    browse.addEventListener('click', (e) => { e.preventDefault(); input.click(); });
+                    input.addEventListener('change', (ev) => {
+                        const files = input.files;
+                        if (files && files.length && this.r) {
+                            if (typeof this.r.addFiles === 'function') this.r.addFiles(files, ev);
+                            else Array.from(files).forEach((file) => this.r.addFile(file, ev));
+                        }
+                        input.value = ''; // autorise la re-sélection du même fichier
+                    });
+                }
             },
 
             emit(t, d) { window.dispatchEvent(new CustomEvent('abbev:upload-'+t, {detail:d})); },
@@ -792,6 +823,7 @@
                     confirm: el.getAttribute('data-confirm-confirm'),
                 };
             }
+            let openedAt = 0;
             function open(opts, cb){
                 onConfirm = cb;
                 const t = TYPES[opts.type] || TYPES.danger;
@@ -803,15 +835,51 @@
                 elOk.className   = 'cm-btn ' + t.btn;
                 root.classList.add('is-open');
                 document.body.style.overflow = 'hidden';
+                openedAt = Date.now();
                 setTimeout(()=>elOk.focus(), 60);
             }
             function close(){ root.classList.remove('is-open'); document.body.style.overflow=''; onConfirm=null; }
             elOk.addEventListener('click',()=>{ const cb = onConfirm; close(); if(cb) cb(); });
             elNo.addEventListener('click', close);
-            root.addEventListener('click',(e)=>{ if(e.target===root) close(); });
+            // Fermeture au clic sur le fond, MAIS pas pendant les 350ms qui suivent
+            // l'ouverture : sinon un double-clic réflexe sur « Enregistrer » (le
+            // 2e clic tombe sur le fond) referme le modal → sensation de « 2-3 clics ».
+            root.addEventListener('click',(e)=>{ if(e.target===root && Date.now()-openedAt > 350) close(); });
             document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && root.classList.contains('is-open')) close(); });
             return { open, readOpts };
         })();
+
+        /* ====== Toast ABBEV (notification non bloquante — remplace window.alert) ====== */
+        ABBEV.toast = function(message, type, duration){
+            type = type || 'success';
+            duration = duration === undefined ? 5000 : duration;
+            let host = document.getElementById('abbev-toast-host');
+            if(!host){
+                host = document.createElement('div');
+                host.id = 'abbev-toast-host';
+                host.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10050;display:flex;flex-direction:column;gap:10px;max-width:min(440px,92vw);pointer-events:none;';
+                document.body.appendChild(host);
+            }
+            const C = {
+                success: { bg:'#052e1a', bd:'#22c55e', fg:'#bbf7d0', icon:'fa-circle-check' },
+                error:   { bg:'#3a0d10', bd:'#ef4444', fg:'#fecaca', icon:'fa-circle-exclamation' },
+                info:    { bg:'#0b2b34', bd:'#22d3ee', fg:'#a5f3fc', icon:'fa-circle-info' },
+            }[type] || { bg:'#052e1a', bd:'#22c55e', fg:'#bbf7d0', icon:'fa-circle-check' };
+            const el = document.createElement('div');
+            el.style.cssText = 'pointer-events:auto;background:'+C.bg+';border-left:4px solid '+C.bd+';color:'+C.fg
+                +';padding:12px 14px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:.9rem;line-height:1.55;'
+                +'white-space:pre-line;display:flex;gap:10px;align-items:flex-start;opacity:0;transform:translateX(14px);transition:opacity .2s,transform .2s;';
+            el.innerHTML = '<i class="fas '+C.icon+'" style="margin-top:2px;color:'+C.bd+'"></i>'
+                +'<div class="abbev-toast-msg" style="flex:1"></div>'
+                +'<button type="button" aria-label="Fermer" style="background:none;border:none;color:'+C.fg+';cursor:pointer;opacity:.65"><i class="fas fa-times"></i></button>';
+            el.querySelector('.abbev-toast-msg').textContent = message; // textContent = pas d'injection HTML
+            const remove = ()=>{ el.style.opacity='0'; el.style.transform='translateX(14px)'; setTimeout(()=>el.remove(),200); };
+            el.querySelector('button').addEventListener('click', remove);
+            host.appendChild(el);
+            requestAnimationFrame(()=>{ el.style.opacity='1'; el.style.transform='none'; });
+            if(duration>0) setTimeout(remove, duration);
+            return el;
+        };
 
         // Intercepte les soumissions de FORMULAIRE à confirmer AVANT le loader/PJAX.
         document.addEventListener('submit',(e)=>{
