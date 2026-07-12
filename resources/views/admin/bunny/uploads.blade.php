@@ -165,13 +165,16 @@
                                     <div class="min-w-0">
                                         <p class="text-white truncate max-w-xs" title="{{ $u->title }}">{{ $u->title }}</p>
                                         <div class="flex items-center gap-2 mt-0.5 flex-wrap">
-                                            @if($localReady)
+                                            @php $isMp4 = \Illuminate\Support\Str::endsWith(\Illuminate\Support\Str::lower((string) $u->local_path), ['.mp4', '.m4v']); @endphp
+                                            @if($localReady && $isMp4)
+                                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-300 border border-green-500/25"
+                                                      title="MP4 H.264 — lisible partout : Android, iPhone, Safari, Web.">
+                                                    <i class="fab fa-apple"></i> Dispo iPhone ✓
+                                                </span>
+                                            @elseif($localReady)
                                                 <span class="text-[10px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-300 border border-green-500/25">LOCAL · dispo picker</span>
-                                            @endif
-                                            @php $needsMp4 = $localReady && ! \Illuminate\Support\Str::endsWith(\Illuminate\Support\Str::lower((string) $u->local_path), ['.mp4', '.m4v']); @endphp
-                                            @if($needsMp4)
                                                 <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25"
-                                                      title="Format .webm/.mkv : non lisible sur iPhone/Safari. Conversion MP4 auto quand ffmpeg est installé sur le serveur.">
+                                                      title="Format {{ strtoupper(pathinfo($u->local_path, PATHINFO_EXTENSION)) }} : non lisible sur iPhone/Safari. Conversion MP4 en cours (worker bunny).">
                                                     <i class="fas fa-triangle-exclamation"></i> {{ strtoupper(pathinfo($u->local_path, PATHINFO_EXTENSION)) }} · iOS ✗
                                                 </span>
                                             @endif
