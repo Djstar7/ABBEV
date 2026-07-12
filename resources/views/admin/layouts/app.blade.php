@@ -177,6 +177,59 @@
         .cm-btn-warning:hover { background: #d97706; }
         .cm-btn-primary { background: #06b6d4; }
         .cm-btn-primary:hover { background: #0891b2; }
+
+        /* ====== Scrollbar custom ABBEV (listes défilables) ====== */
+        .abbev-scroll { scrollbar-width: thin; scrollbar-color: #0891b2 transparent; }
+        .abbev-scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+        .abbev-scroll::-webkit-scrollbar-track { background: transparent; }
+        .abbev-scroll::-webkit-scrollbar-thumb {
+            background: linear-gradient(#06b6d4, #0891b2);
+            border-radius: 999px; border: 2px solid #18181b;
+        }
+        .abbev-scroll::-webkit-scrollbar-thumb:hover { background: linear-gradient(#22d3ee, #06b6d4); }
+
+        /* ====== Picker vidéo / listes (media + épisodes) ====== */
+        .abbev-search { position: relative; }
+        .abbev-search > i {
+            position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+            color: #52525b; font-size: 15px; pointer-events: none; transition: color .2s;
+        }
+        .abbev-search input { padding-left: 44px !important; }
+        .abbev-search input:focus + i, .abbev-search:focus-within > i { color: #06b6d4; }
+
+        .abbev-pick-item {
+            display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+            padding: 10px 12px; border-radius: 12px; border: 1px solid transparent;
+            transition: background .18s, border-color .18s, transform .12s;
+        }
+        .abbev-pick-item:hover {
+            background: rgba(6,182,212,.08); border-color: rgba(6,182,212,.35);
+            transform: translateX(2px);
+        }
+        .abbev-pick-thumb {
+            position: relative; width: 84px; height: 50px; flex-shrink: 0;
+            border-radius: 9px; overflow: hidden; background: #27272a;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .abbev-pick-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .abbev-pick-thumb .ph { color: #52525b; font-size: 16px; }
+        .abbev-pick-thumb::after {
+            content: '\f04b'; font-family: 'Font Awesome 6 Free'; font-weight: 900;
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 13px; background: rgba(6,182,212,.55);
+            opacity: 0; transition: opacity .18s;
+        }
+        .abbev-pick-item:hover .abbev-pick-thumb::after { opacity: 1; }
+        .abbev-badge-local {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+            background: rgba(6,182,212,.15); color: #67e8f9; border: 1px solid rgba(6,182,212,.3);
+        }
+        .abbev-badge-bunny {
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+            background: rgba(249,115,22,.15); color: #fdba74; border: 1px solid rgba(249,115,22,.3);
+        }
     </style>
 
     <div id="page-styles">@stack('styles')</div>
@@ -242,7 +295,7 @@
             </div>
 
             <!-- Navigation -->
-            <nav class="flex-1 mt-6 px-3 overflow-y-auto">
+            <nav class="flex-1 mt-6 px-3 overflow-y-auto abbev-scroll">
                 <!-- Dashboard -->
                 <div class="space-y-1">
                     <a href="{{ route('admin.dashboard') }}"
@@ -412,7 +465,7 @@
             </header>
 
             <!-- Page Content -->
-            <main class="flex-1 overflow-y-auto p-6">
+            <main class="flex-1 overflow-y-auto p-6 abbev-scroll">
                 <!-- Flash Messages -->
                 @if(session('success'))
                     <div class="mb-6 bg-green-50 border-l-4 border-green-500 text-green-700 px-4 py-3 rounded-lg flex items-center justify-between shadow-sm" role="alert">
