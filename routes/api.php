@@ -186,6 +186,8 @@ Route::middleware('auth:sanctum')->prefix('subscription-payment')->group(functio
 
     // KPay — paiement
     Route::get('/kpay/status/{reference}', [SubscriptionPaymentController::class, 'checkKpayStatus']);
+    // KPay — pays & opérateurs supportés (pour le sélecteur mobile).
+    Route::get('/kpay/countries', [SubscriptionPaymentController::class, 'kpayCountries']);
 
     // Apple In-App Purchase (iOS) — vérification d'un achat StoreKit.
     Route::post('/apple/verify', [SubscriptionPaymentController::class, 'verifyApple']);
