@@ -601,20 +601,20 @@
                 }
 
                 // Bouton « Choisir des fichiers » : on N'UTILISE PAS
-                // Resumable.assignBrowse — il superpose un <input file> invisible
-                // par-dessus le bouton, et cet overlay se cale mal sur le bouton
-                // reconstruit par le PJAX (le clic tombe parfois à côté → « des
-                // fois ça marche, des fois non »). On câble un input caché dédié,
-                // déterministe : clic bouton → input.click() → dialogue → addFiles.
-                if (browse && !browse._abbevBound) {
-                    browse._abbevBound = true;
+                // Resumable.assignBrowse (son <input> overlay se cale mal sur le
+                // bouton reconstruit par le PJAX → « des fois oui, des fois non »).
+                //
+                // Un SEUL input caché, attaché au <body> et RÉUTILISÉ. Important :
+                // il ne doit PAS être enfant du bouton — sinon input.click()
+                // rebondirait sur le handler du bouton (ré-entrance) et Chrome
+                // bloquerait le sélecteur de fichiers (chaîne de clics
+                // programmatiques). Ici l'input est hors du bouton : pas de rebond.
+                if (!this._browseInput) {
                     const input = document.createElement('input');
                     input.type = 'file';
                     input.multiple = true;
                     input.accept = 'video/*,.mkv,.ts,.m4v,.webm,.avi,.mov';
-                    input.style.display = 'none';
-                    browse.appendChild(input);
-                    browse.addEventListener('click', (e) => { e.preventDefault(); input.click(); });
+                    input.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;';
                     input.addEventListener('change', (ev) => {
                         const files = input.files;
                         if (files && files.length && this.r) {
@@ -623,6 +623,12 @@
                         }
                         input.value = ''; // autorise la re-sélection du même fichier
                     });
+                    document.body.appendChild(input);
+                    this._browseInput = input;
+                }
+                if (browse && !browse._abbevBound) {
+                    browse._abbevBound = true;
+                    browse.addEventListener('click', (e) => { e.preventDefault(); this._browseInput.click(); });
                 }
             },
 
