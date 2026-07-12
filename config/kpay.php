@@ -7,133 +7,127 @@ return [
     | Pays, opérateurs et codes provider KPay (Mobile Money)
     |--------------------------------------------------------------------------
     |
-    | Mapping utilisé pour router un paiement KPay vers le bon pays/opérateur :
-    |   - `currency` : devise LOCALE réellement débitée par KPay pour ce pays.
-    |   - `dial`     : indicatif téléphonique (préfixé au numéro local saisi).
-    |   - `operators`: opérateur interne (envoyé par le mobile) => code provider
-    |                  EXACT attendu par KPay.
+    | Catalogue faisant autorité (fourni par l'intégration KPay). Chaque
+    | opérateur porte :
+    |   - `code`     : code provider EXACT envoyé à KPay (identifiant unique).
+    |   - `label`    : libellé affiché à l'utilisateur.
+    |   - `currency` : devise LOCALE réellement débitée par cet opérateur.
     |
-    | ⚠️ IMPORTANT — les codes provider suivent le format {OPÉRATEUR}_{ISO3}
-    | observé pour le Cameroun (MTN_MOMO_CMR, ORANGE_CMR). VÉRIFIEZ-les contre la
-    | liste réelle des providers de VOTRE compte KPay :
-    |     php artisan kpay:providers
-    | puis corrigez ici toute valeur qui ne correspondrait pas. Un code erroné
-    | fait échouer (ou mal router) un vrai paiement.
+    | Un même pays peut proposer plusieurs devises (ex. RDC : CDF et USD), d'où
+    | la devise portée PAR OPÉRATEUR et non par pays. Le montant est converti
+    | depuis la base XOF vers la devise de l'opérateur choisi.
     |
-    | Basé sur la pricelist KPay des pays/opérateurs utilisés par ABBEV.
+    | `dial` = indicatif téléphonique (préfixé au numéro local saisi).
     */
     'countries' => [
         'BJ' => [
             'name' => 'Bénin',
-            'currency' => 'XOF',
+            'flag' => '🇧🇯',
             'dial' => '229',
             'operators' => [
-                'MTN_MONEY' => 'MTN_MOMO_BEN',
-                'MOOV_MONEY' => 'MOOV_BEN',
-            ],
-        ],
-        'CM' => [
-            'name' => 'Cameroun',
-            'currency' => 'XAF',
-            'dial' => '237',
-            'operators' => [
-                'MTN_MONEY' => 'MTN_MOMO_CMR',
-                'ORANGE_MONEY' => 'ORANGE_CMR',
+                ['code' => 'MOOV_BEN', 'label' => 'Moov Money', 'currency' => 'XOF'],
+                ['code' => 'MTN_MOMO_BEN', 'label' => 'MTN MoMo', 'currency' => 'XOF'],
             ],
         ],
         'CI' => [
             'name' => "Côte d'Ivoire",
-            'currency' => 'XOF',
+            'flag' => '🇨🇮',
             'dial' => '225',
             'operators' => [
-                'MTN_MONEY' => 'MTN_MOMO_CIV',
-                'ORANGE_MONEY' => 'ORANGE_CIV',
+                ['code' => 'MTN_MOMO_CIV', 'label' => 'MTN MoMo', 'currency' => 'XOF'],
+                ['code' => 'ORANGE_CIV', 'label' => 'Orange Money', 'currency' => 'XOF'],
+            ],
+        ],
+        'CM' => [
+            'name' => 'Cameroun',
+            'flag' => '🇨🇲',
+            'dial' => '237',
+            'operators' => [
+                ['code' => 'MTN_MOMO_CMR', 'label' => 'MTN MoMo', 'currency' => 'XAF'],
+                ['code' => 'ORANGE_CMR', 'label' => 'Orange Money', 'currency' => 'XAF'],
             ],
         ],
         'CD' => [
             'name' => 'RD Congo',
-            'currency' => 'CDF',
+            'flag' => '🇨🇩',
             'dial' => '243',
             'operators' => [
-                'VODACOM_MONEY' => 'VODACOM_MPESA_COD',
-                'AIRTEL_MONEY' => 'AIRTEL_COD',
-                'ORANGE_MONEY' => 'ORANGE_COD',
+                ['code' => 'AIRTEL_COD_CDF', 'label' => 'Airtel Money', 'currency' => 'CDF'],
+                ['code' => 'ORANGE_COD_CDF', 'label' => 'Orange Money', 'currency' => 'CDF'],
+                ['code' => 'VODACOM_COD_CDF', 'label' => 'Vodacom M-Pesa', 'currency' => 'CDF'],
+                ['code' => 'AIRTEL_COD_USD', 'label' => 'Airtel Money (USD)', 'currency' => 'USD'],
+                ['code' => 'ORANGE_COD_USD', 'label' => 'Orange Money (USD)', 'currency' => 'USD'],
+                ['code' => 'VODACOM_COD_USD', 'label' => 'Vodacom M-Pesa (USD)', 'currency' => 'USD'],
+            ],
+        ],
+        'CG' => [
+            'name' => 'Congo-Brazzaville',
+            'flag' => '🇨🇬',
+            'dial' => '242',
+            'operators' => [
+                ['code' => 'AIRTEL_COG', 'label' => 'Airtel Money', 'currency' => 'XAF'],
+                ['code' => 'MTN_MOMO_COG', 'label' => 'MTN MoMo', 'currency' => 'XAF'],
             ],
         ],
         'GA' => [
             'name' => 'Gabon',
-            'currency' => 'XAF',
+            'flag' => '🇬🇦',
             'dial' => '241',
             'operators' => [
-                'AIRTEL_MONEY' => 'AIRTEL_GAB',
+                ['code' => 'AIRTEL_GAB', 'label' => 'Airtel Money', 'currency' => 'XAF'],
             ],
         ],
-        'CG' => [
-            'name' => 'Congo',
-            'currency' => 'XAF',
-            'dial' => '242',
+        'KE' => [
+            'name' => 'Kenya',
+            'flag' => '🇰🇪',
+            'dial' => '254',
             'operators' => [
-                'AIRTEL_MONEY' => 'AIRTEL_COG',
-                'MTN_MONEY' => 'MTN_MOMO_COG',
+                ['code' => 'MPESA_KEN', 'label' => 'Safaricom M-Pesa', 'currency' => 'KES'],
             ],
         ],
         'RW' => [
             'name' => 'Rwanda',
-            'currency' => 'RWF',
+            'flag' => '🇷🇼',
             'dial' => '250',
             'operators' => [
-                'AIRTEL_MONEY' => 'AIRTEL_RWA',
-                'MTN_MONEY' => 'MTN_MOMO_RWA',
+                ['code' => 'AIRTEL_RWA', 'label' => 'Airtel Money', 'currency' => 'RWF'],
+                ['code' => 'MTN_MOMO_RWA', 'label' => 'MTN MoMo', 'currency' => 'RWF'],
             ],
         ],
         'SN' => [
             'name' => 'Sénégal',
-            'currency' => 'XOF',
+            'flag' => '🇸🇳',
             'dial' => '221',
             'operators' => [
-                'FREE_MONEY' => 'FREE_SEN',
-                'ORANGE_MONEY' => 'ORANGE_SEN',
+                ['code' => 'FREE_SEN', 'label' => 'Free Money', 'currency' => 'XOF'],
+                ['code' => 'ORANGE_SEN', 'label' => 'Orange Money', 'currency' => 'XOF'],
             ],
         ],
         'SL' => [
             'name' => 'Sierra Leone',
-            'currency' => 'SLE',
+            'flag' => '🇸🇱',
             'dial' => '232',
             'operators' => [
-                'ORANGE_MONEY' => 'ORANGE_SLE',
+                ['code' => 'ORANGE_SLE', 'label' => 'Orange Money', 'currency' => 'SLE'],
             ],
         ],
         'UG' => [
             'name' => 'Ouganda',
-            'currency' => 'UGX',
+            'flag' => '🇺🇬',
             'dial' => '256',
             'operators' => [
-                'AIRTEL_MONEY' => 'AIRTEL_UGA',
-                'MTN_MONEY' => 'MTN_MOMO_UGA',
+                ['code' => 'AIRTEL_UGA', 'label' => 'Airtel Money', 'currency' => 'UGX'],
+                ['code' => 'MTN_MOMO_UGA', 'label' => 'MTN MoMo', 'currency' => 'UGX'],
             ],
         ],
         'ZM' => [
             'name' => 'Zambie',
-            'currency' => 'ZMW',
+            'flag' => '🇿🇲',
             'dial' => '260',
             'operators' => [
-                'AIRTEL_MONEY' => 'AIRTEL_ZMB',
-                'MTN_MONEY' => 'MTN_MOMO_ZMB',
-                'ZAMTEL_MONEY' => 'ZAMTEL_ZMB',
+                ['code' => 'MTN_MOMO_ZMB', 'label' => 'MTN MoMo', 'currency' => 'ZMW'],
+                ['code' => 'ZAMTEL_ZMB', 'label' => 'Zamtel Kwacha', 'currency' => 'ZMW'],
             ],
         ],
-    ],
-
-    /*
-    | Libellés lisibles des opérateurs internes (pour l'UI mobile).
-    */
-    'operator_labels' => [
-        'MTN_MONEY' => 'MTN MoMo',
-        'ORANGE_MONEY' => 'Orange Money',
-        'MOOV_MONEY' => 'Moov Money',
-        'AIRTEL_MONEY' => 'Airtel Money',
-        'VODACOM_MONEY' => 'Vodacom M-Pesa',
-        'FREE_MONEY' => 'Free Money',
-        'ZAMTEL_MONEY' => 'Zamtel Kwacha',
     ],
 ];

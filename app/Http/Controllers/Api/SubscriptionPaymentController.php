@@ -49,7 +49,9 @@ class SubscriptionPaymentController extends Controller
             'subscription_plan_id' => 'required|exists:subscription_plans,id',
             'payment_method' => 'required|in:paypal,freemopay,kpay,stripe',
             'phone_number' => 'required_if:payment_method,freemopay|required_if:payment_method,kpay|string',
-            'mobile_operator' => 'required_if:payment_method,kpay|in:MTN_MONEY,ORANGE_MONEY,MOOV_MONEY,AIRTEL_MONEY,VODACOM_MONEY,FREE_MONEY,ZAMTEL_MONEY',
+            // Code opérateur KPay du catalogue (ex. ORANGE_CMR, AIRTEL_COD_CDF).
+            // Validé ensuite contre le pays (config/kpay.php).
+            'mobile_operator' => 'required_if:payment_method,kpay|string',
             // Pays du paiement KPay (défaut : pays du compte, sinon Cameroun).
             'country_code' => 'nullable|string|size:2',
         ]);
@@ -212,7 +214,9 @@ class SubscriptionPaymentController extends Controller
                 }
 
                 $operator = $validated['mobile_operator'];
-                if (! isset($country['operators'][$operator])) {
+                $operatorEntry = collect($country['operators'])
+                    ->firstWhere('code', $operator);
+                if (! $operatorEntry) {
                     $transaction->update(['status' => 'failed']);
 
                     return response()->json([
@@ -222,9 +226,10 @@ class SubscriptionPaymentController extends Controller
                 }
 
                 // Montant réellement débité, converti depuis la base XOF vers la
-                // devise LOCALE du pays (au taux live). La transaction, elle,
+                // devise de l'OPÉRATEUR (au taux live) — un pays peut avoir
+                // plusieurs devises (ex. RDC : CDF ou USD). La transaction, elle,
                 // GARDE son montant en XOF (base canonique pour l'affichage).
-                $localCurrency = $country['currency'];
+                $localCurrency = $operatorEntry['currency'];
                 $amountLocal = \App\Models\Currency::convertFromXofTo((float) $plan->price, $localCurrency)
                     ?? (float) $plan->price;
                 $amountForKpay = ($amountLocal == floor($amountLocal))
@@ -813,21 +818,21 @@ class SubscriptionPaymentController extends Controller
      */
     public function kpayCountries()
     {
-        $labels = (array) config('kpay.operator_labels', []);
         $countries = [];
 
         foreach ((array) config('kpay.countries', []) as $iso => $c) {
             $operators = [];
-            foreach (($c['operators'] ?? []) as $code => $provider) {
+            foreach (($c['operators'] ?? []) as $op) {
                 $operators[] = [
-                    'code' => $code,
-                    'label' => $labels[$code] ?? $code,
+                    'code' => $op['code'],
+                    'label' => $op['label'] ?? $op['code'],
+                    'currency' => $op['currency'] ?? null,
                 ];
             }
             $countries[] = [
                 'code' => $iso,
                 'name' => $c['name'],
-                'currency' => $c['currency'],
+                'flag' => $c['flag'] ?? null,
                 'dial_code' => $c['dial'],
                 'operators' => $operators,
             ];

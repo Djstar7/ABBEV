@@ -53,9 +53,10 @@ class KpayService
     }
 
     /**
-     * Opérateurs disponibles pour un pays (codes internes => code provider KPay).
+     * Opérateurs disponibles pour un pays : liste de
+     * `['code' => ..., 'label' => ..., 'currency' => ...]`.
      *
-     * @return array<string,string>
+     * @return array<int,array{code:string,label:string,currency:string}>
      */
     public function operatorsFor(string $iso2): array
     {
@@ -63,17 +64,31 @@ class KpayService
     }
 
     /**
-     * Résout le code provider KPay EXACT à partir d'un opérateur interne et,
-     * si fourni, du pays. Repli sur le mapping Cameroun (legacy) puis sur la
-     * valeur brute (si c'est déjà un code KPay).
+     * Retrouve un opérateur d'un pays par son code provider KPay.
+     *
+     * @return array{code:string,label:string,currency:string}|null
+     */
+    public function findOperator(string $iso2, string $code): ?array
+    {
+        foreach ($this->operatorsFor($iso2) as $op) {
+            if (($op['code'] ?? null) === $code) {
+                return $op;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Résout le code provider KPay EXACT. Le mobile envoie désormais
+     * directement le code du catalogue (ex. « ORANGE_CMR », « AIRTEL_COD_CDF ») :
+     * si c'est un code valide pour le pays, on le renvoie tel quel. Repli
+     * legacy pour les anciens clients qui envoyaient l'enum interne (Cameroun).
      */
     public function providerFor(string $operator, ?string $countryCode = null): string
     {
-        if ($countryCode) {
-            $operators = $this->operatorsFor($countryCode);
-            if (isset($operators[$operator])) {
-                return $operators[$operator];
-            }
+        if ($countryCode && $this->findOperator($countryCode, $operator)) {
+            return $operator;
         }
 
         return self::LEGACY_PROVIDER_MAP[$operator] ?? $operator;

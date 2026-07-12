@@ -19,14 +19,15 @@ class KpayMultiCountryTest extends TestCase
         $this->kpay = new KpayService();
     }
 
-    public function test_resout_le_bon_provider_selon_le_pays(): void
+    public function test_code_provider_valide_est_renvoye_tel_quel(): void
     {
-        $this->assertSame('MTN_MOMO_CMR', $this->kpay->providerFor('MTN_MONEY', 'CM'));
-        $this->assertSame('ORANGE_CMR', $this->kpay->providerFor('ORANGE_MONEY', 'CM'));
-        $this->assertSame('MTN_MOMO_BEN', $this->kpay->providerFor('MTN_MONEY', 'BJ'));
-        $this->assertSame('AIRTEL_COD', $this->kpay->providerFor('AIRTEL_MONEY', 'CD'));
-        $this->assertSame('VODACOM_MPESA_COD', $this->kpay->providerFor('VODACOM_MONEY', 'CD'));
-        $this->assertSame('ORANGE_SLE', $this->kpay->providerFor('ORANGE_MONEY', 'SL'));
+        // Le mobile envoie directement le code du catalogue.
+        $this->assertSame('MTN_MOMO_CMR', $this->kpay->providerFor('MTN_MOMO_CMR', 'CM'));
+        $this->assertSame('ORANGE_CMR', $this->kpay->providerFor('ORANGE_CMR', 'CM'));
+        $this->assertSame('MTN_MOMO_BEN', $this->kpay->providerFor('MTN_MOMO_BEN', 'BJ'));
+        $this->assertSame('AIRTEL_COD_CDF', $this->kpay->providerFor('AIRTEL_COD_CDF', 'CD'));
+        $this->assertSame('VODACOM_COD_USD', $this->kpay->providerFor('VODACOM_COD_USD', 'CD'));
+        $this->assertSame('MPESA_KEN', $this->kpay->providerFor('MPESA_KEN', 'KE'));
     }
 
     public function test_repli_legacy_cameroun_sans_pays(): void
@@ -35,11 +36,15 @@ class KpayMultiCountryTest extends TestCase
         $this->assertSame('ORANGE_CMR', $this->kpay->providerFor('ORANGE_MONEY'));
     }
 
-    public function test_operateurs_par_pays(): void
+    public function test_operateurs_et_devise_par_operateur(): void
     {
-        $this->assertArrayHasKey('VODACOM_MONEY', $this->kpay->operatorsFor('CD'));
-        $this->assertArrayHasKey('AIRTEL_MONEY', $this->kpay->operatorsFor('CD'));
-        $this->assertCount(3, $this->kpay->operatorsFor('ZM')); // Airtel, MTN, Zamtel
+        // RDC : 6 opérateurs (CDF x3 + USD x3).
+        $this->assertCount(6, $this->kpay->operatorsFor('CD'));
+        $this->assertSame('CDF', $this->kpay->findOperator('CD', 'AIRTEL_COD_CDF')['currency']);
+        $this->assertSame('USD', $this->kpay->findOperator('CD', 'ORANGE_COD_USD')['currency']);
+        $this->assertNull($this->kpay->findOperator('CD', 'INCONNU'));
+        // Kenya présent (M-Pesa / KES).
+        $this->assertSame('KES', $this->kpay->findOperator('KE', 'MPESA_KEN')['currency']);
         $this->assertSame([], $this->kpay->operatorsFor('XX')); // pays inconnu
     }
 
@@ -60,11 +65,12 @@ class KpayMultiCountryTest extends TestCase
 
         foreach ($countries as $iso => $c) {
             $this->assertSame(2, strlen($iso), "ISO2 attendu pour {$iso}");
-            $this->assertNotEmpty($c['currency'], "Devise manquante pour {$iso}");
             $this->assertNotEmpty($c['dial'], "Indicatif manquant pour {$iso}");
             $this->assertNotEmpty($c['operators'], "Opérateurs manquants pour {$iso}");
-            foreach ($c['operators'] as $op => $provider) {
-                $this->assertNotEmpty($provider, "Code provider vide pour {$iso}/{$op}");
+            foreach ($c['operators'] as $op) {
+                $this->assertNotEmpty($op['code'], "Code provider vide pour {$iso}");
+                $this->assertNotEmpty($op['label'], "Libellé vide pour {$iso}/{$op['code']}");
+                $this->assertNotEmpty($op['currency'], "Devise vide pour {$iso}/{$op['code']}");
             }
         }
     }
