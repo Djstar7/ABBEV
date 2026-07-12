@@ -10,7 +10,7 @@ class SubscriptionPlan extends Model
     use HasObfuscatedRouteKey;
 
     protected $fillable = [
-        'name', 'description', 'price', 'duration_days', 'features',
+        'name', 'tier', 'description', 'price', 'duration_days', 'features',
         'is_active', 'is_popular', 'order', 'apple_product_id'
     ];
 

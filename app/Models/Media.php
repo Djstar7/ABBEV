@@ -12,9 +12,17 @@ class Media extends Model
 {
     use HasObfuscatedRouteKey;
 
+    /** Tiers de rémunération/classification du contenu. */
+    public const TIERS = ['classique', 'standard', 'premium'];
+
     protected $fillable = [
         'user_id',
         'category_id',
+        'tier',
+        'moderation_status',
+        'reviewed_by',
+        'reviewed_at',
+        'rejection_reason',
         'type',
         'title',
         'slug',
@@ -33,12 +41,15 @@ class Media extends Model
         'published_at',
         'is_featured',
         'views_count',
+        'producer_views',
     ];
 
     protected $casts = [
         'published_at'   => 'datetime',
+        'reviewed_at'    => 'datetime',
         'is_featured'    => 'boolean',
         'video_metadata' => 'array',
+        'producer_views' => 'integer',
     ];
 
     public function category(): BelongsTo
@@ -52,9 +63,15 @@ class Media extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /** Membre du panel ayant validé/rejeté le contenu (assistant/admin). */
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
     /**
      * Restreint la requête aux contenus visibles par un utilisateur du panel :
-     * un producteur ne voit que SES contenus ; un admin voit tout.
+     * un producteur ne voit que SES contenus ; admin/assistant voient tout.
      */
     public function scopeVisibleTo(Builder $query, ?User $user): Builder
     {
@@ -62,7 +79,24 @@ class Media extends Model
             return $query->where('user_id', $user->id);
         }
 
-        return $query; // admin (ou contexte non restreint) : tout
+        return $query; // admin/assistant (ou contexte non restreint) : tout
+    }
+
+    /** Contenus approuvés par la modération (visibles au catalogue public). */
+    public function scopeApproved(Builder $query): Builder
+    {
+        return $query->where('moderation_status', 'approved');
+    }
+
+    /** Contenus en attente de modération. */
+    public function scopePending(Builder $query): Builder
+    {
+        return $query->where('moderation_status', 'pending');
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->moderation_status === 'approved';
     }
 
     /**

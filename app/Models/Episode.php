@@ -24,12 +24,14 @@ class Episode extends Model
         'thumbnail_path',
         'published_at',
         'views_count',
+        'producer_views',
     ];
 
     protected $casts = [
         'episode_number' => 'integer',
         'duration'       => 'integer',
         'views_count'    => 'integer',
+        'producer_views' => 'integer',
         'published_at'   => 'datetime',
         'video_metadata' => 'array',
     ];
@@ -53,6 +55,15 @@ class Episode extends Model
     /**
      * Incrémenter le compteur de vues.
      */
+    /**
+     * Vues « producteur » de cet épisode : +1 par abonnement payé du tier de
+     * sa série. Hérité du tier de la série (via season → media.tier).
+     */
+    public function producerTier(): ?string
+    {
+        return $this->season?->media?->tier;
+    }
+
     public function incrementViews(): void
     {
         $this->increment('views_count');

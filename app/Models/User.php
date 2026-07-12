@@ -26,7 +26,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Rôles disponibles : 'admin' | 'producer' | 'user'.
+     * Rôles disponibles : 'admin' | 'producer' | 'assistant' | 'user'.
      */
     public function isAdmin(): bool
     {
@@ -39,10 +39,20 @@ class User extends Authenticatable
         return $this->role === 'producer';
     }
 
-    /** Membre du panel (admin ou producteur) : a accès au dashboard. */
+    /**
+     * Assistant (direction artistique) : valide/rejette les contenus et leur
+     * attribue catégorie + tier. Accès au panel de modération, mais pas à la
+     * gestion (users, forfaits, config…) réservée à l'admin.
+     */
+    public function isAssistant(): bool
+    {
+        return $this->role === 'assistant';
+    }
+
+    /** Membre du panel (admin, producteur ou assistant) : a accès au dashboard. */
     public function isStaff(): bool
     {
-        return in_array($this->role, ['admin', 'producer'], true);
+        return in_array($this->role, ['admin', 'producer', 'assistant'], true);
     }
 
     /** Contenus (films/séries) dont cet utilisateur est propriétaire. */
