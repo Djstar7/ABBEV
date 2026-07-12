@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\CategoryApiController;
 use App\Http\Controllers\Api\CryptoPaymentController;
 use App\Http\Controllers\Api\EpisodeApiController;
 use App\Http\Controllers\Api\LocaleApiController;
+use App\Http\Controllers\Api\LocalVideoStreamController;
 use App\Http\Controllers\Api\MediaApiController;
 use App\Http\Controllers\Api\MyListApiController;
 use App\Http\Controllers\Api\ReservationPaymentController;
@@ -122,6 +123,14 @@ Route::prefix('v1')->group(function () {
             );
         });
     });
+
+    // Streaming des vidéos LOCALES via URL SIGNÉE (générée par /watch après
+    // vérification de l'abonnement). La signature (+ expiration) EST le
+    // contrôle d'accès — plus de lien public permanent partageable.
+    Route::get('/watch/local/{type}/{id}', LocalVideoStreamController::class)
+        ->middleware('signed')
+        ->where('type', 'movie|episode')
+        ->name('api.watch.local');
 
     // -------------------------------------------------------------
     // PUBLIC — catégories / recherche / featured global
