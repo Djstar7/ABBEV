@@ -37,7 +37,8 @@ class LocalVideoStreamTest extends TestCase
 
     private function localMovie(): Media
     {
-        Storage::disk('public')->put('uploads/test_movie.mp4', 'FAKE-MP4-BYTES');
+        // Vidéos locales : disque PRIVÉ (jamais servi directement par le web).
+        Storage::disk('local')->put('videos/test_movie.mp4', 'FAKE-MP4-BYTES');
         $category = Category::firstOrCreate(['slug' => 'action'], ['name' => 'Action']);
 
         return Media::create([
@@ -46,7 +47,7 @@ class LocalVideoStreamTest extends TestCase
             'slug'           => 'film-local',
             'type'           => 'movie',
             'video_provider' => 'local',
-            'video_path'     => 'uploads/test_movie.mp4',
+            'video_path'     => 'videos/test_movie.mp4',
             'published_at'   => now(),
         ]);
     }

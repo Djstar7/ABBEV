@@ -258,6 +258,22 @@ class BunnyUploadController extends Controller
     }
 
     /**
+     * Prévisualisation admin de la vidéo locale (disque privé). Sert le fichier
+     * en streaming (support Range) — remplace l'ancien lien /storage direct.
+     */
+    public function stream(BunnyUpload $upload): mixed
+    {
+        $this->authorizeUploadOwnership($upload);
+
+        $path = $upload->localFilePath();
+        if (! $path) {
+            abort(404, 'Vidéo locale non disponible.');
+        }
+
+        return response()->file($path);
+    }
+
+    /**
      * Relance le transfert vers Bunny d'un upload échoué (après correction de la clé API).
      * Possible uniquement si l'original local est encore présent.
      */
@@ -341,10 +357,10 @@ class BunnyUploadController extends Controller
             }
         }
 
-        // Fichiers (vidéo assemblée publique + chemins éventuels) et morceaux.
+        // Fichiers (vidéo assemblée privée + chemins éventuels) et morceaux.
         $paths = [
             $upload->temp_path,
-            $upload->local_path ? public_path('storage/' . $upload->local_path) : null,
+            $upload->local_path ? \Illuminate\Support\Facades\Storage::disk('local')->path($upload->local_path) : null,
         ];
         foreach ($paths as $p) {
             if ($p && is_file($p)) {

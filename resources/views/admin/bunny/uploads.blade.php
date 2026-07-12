@@ -193,7 +193,7 @@
                             <td class="px-4 py-3" data-cell="actions">
                                 <div class="flex items-center justify-end gap-1.5">
                                     @if($localReady)
-                                        <a href="{{ asset('storage/' . $u->local_path) }}" target="_blank" title="Lire en local"
+                                        <a href="{{ route('admin.bunny.uploads.stream', $u->id) }}" target="_blank" title="Lire en local"
                                            class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-dark-200 hover:bg-dark-300 text-green-300"><i class="fas fa-play text-xs"></i></a>
                                     @endif
                                     @if($hasFile)

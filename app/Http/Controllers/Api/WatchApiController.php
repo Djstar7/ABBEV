@@ -9,7 +9,6 @@ use App\Models\Media;
 use App\Services\BunnyStreamService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 
@@ -218,7 +217,7 @@ class WatchApiController extends Controller
      * Générée seulement après vérification de l'abonnement : remplace l'ancien
      * lien public permanent (partageable/téléchargeable à l'infini).
      */
-    private function signedLocalUrl(Media|Episode $model, ?Carbon $expiresAt = null, bool $download = false): string
+    private function signedLocalUrl(Media|Episode $model, ?\DateTimeInterface $expiresAt = null, bool $download = false): string
     {
         $type = $model instanceof Episode ? 'episode' : 'movie';
         $expiresAt ??= now()->addSeconds((int) config('services.bunny.token_ttl', 3600));
@@ -277,7 +276,7 @@ class WatchApiController extends Controller
         // Vidéo locale : URL de téléchargement SIGNÉE et expirante (plus de
         // lien public permanent). Le fichier est servi par LocalVideoStreamController.
         if ($model->video_provider === 'local' && $model->video_path) {
-            $localFile  = public_path('storage/' . ltrim($model->video_path, '/'));
+            $localFile  = \Illuminate\Support\Facades\Storage::disk('local')->path($model->video_path);
             $sizeBytes  = is_file($localFile) ? filesize($localFile) : null;
             $ttl        = (int) config('services.bunny.download_token_ttl', 21600);
             $expiresAt  = now()->addSeconds($ttl);

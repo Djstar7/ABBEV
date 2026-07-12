@@ -269,8 +269,11 @@ class DispatchTransferToBunny implements ShouldQueue
         $ext  = strtolower(pathinfo($upload->original_filename, PATHINFO_EXTENSION)) ?: 'mp4';
         $name = $upload->id . '_' . Str::random(8) . '.' . $ext;
 
-        $destDir      = Storage::disk('public')->path('uploads');
-        $relativePath = 'uploads/' . $name;
+        // Disque PRIVÉ (storage/app/private) : jamais accessible directement via
+        // le web. Les vidéos locales ne sont servies que par une URL signée
+        // (LocalVideoStreamController) après vérification de l'abonnement.
+        $destDir      = Storage::disk('local')->path('videos');
+        $relativePath = 'videos/' . $name;
         $absolutePath = $destDir . DIRECTORY_SEPARATOR . $name;
 
         if (! is_dir($destDir)) {
@@ -301,7 +304,7 @@ class DispatchTransferToBunny implements ShouldQueue
                 @unlink($absolutePath); // on remplace l'original non-MP4
                 $absolutePath = $mp4;
                 $name = basename($mp4);
-                $relativePath = 'uploads/' . $name;
+                $relativePath = 'videos/' . $name;
             }
         }
 
@@ -349,7 +352,7 @@ class DispatchTransferToBunny implements ShouldQueue
      */
     protected function deleteServerFile(BunnyUpload $upload): void
     {
-        foreach ([$upload->temp_path, $upload->local_path ? public_path('storage/' . $upload->local_path) : null] as $path) {
+        foreach ([$upload->temp_path, $upload->local_path ? Storage::disk('local')->path($upload->local_path) : null] as $path) {
             if ($path && is_file($path)) {
                 @unlink($path);
             }

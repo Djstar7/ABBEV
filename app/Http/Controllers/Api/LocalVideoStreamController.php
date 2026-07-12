@@ -37,7 +37,7 @@ class LocalVideoStreamController extends Controller
 
         abort_unless($model && $model->video_provider === 'local' && $model->video_path, 404);
 
-        $path = Storage::disk('public')->path($model->video_path);
+        $path = Storage::disk('local')->path($model->video_path);
         abort_unless(is_file($path), 404);
 
         $ext  = strtolower(pathinfo($model->video_path, PATHINFO_EXTENSION));

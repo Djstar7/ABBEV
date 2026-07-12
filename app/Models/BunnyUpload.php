@@ -80,7 +80,7 @@ class BunnyUpload extends Model
      */
     public function hasLocalCopy(): bool
     {
-        return (bool) ($this->local_path && Storage::disk('public')->exists($this->local_path));
+        return (bool) ($this->local_path && Storage::disk('local')->exists($this->local_path));
     }
 
     /**
@@ -93,8 +93,8 @@ class BunnyUpload extends Model
         if ($this->temp_path && is_file($this->temp_path)) {
             return $this->temp_path;
         }
-        if ($this->local_path && Storage::disk('public')->exists($this->local_path)) {
-            return Storage::disk('public')->path($this->local_path);
+        if ($this->local_path && Storage::disk('local')->exists($this->local_path)) {
+            return Storage::disk('local')->path($this->local_path);
         }
 
         return null;
