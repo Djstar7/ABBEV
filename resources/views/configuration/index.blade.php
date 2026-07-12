@@ -68,6 +68,7 @@
         'promo'         => ['icon' => 'fas fa-tag',          'color' => 'text-yellow-400',  'label' => 'Code Promo'],
         'email'         => ['icon' => 'fas fa-envelope',     'color' => 'text-sky-400',     'label' => 'Email (SMTP)'],
         'bunny'         => ['icon' => 'fas fa-cloud',        'color' => 'text-orange-400',  'label' => 'Bunny Stream (vidéo)'],
+        'exchange_rate' => ['icon' => 'fas fa-money-bill-transfer', 'color' => 'text-lime-400', 'label' => 'Taux de change'],
         'notifications' => ['icon' => 'fas fa-bell',         'color' => 'text-pink-400',    'label' => 'Notifications'],
         'security'      => ['icon' => 'fas fa-shield-alt',   'color' => 'text-red-400',     'label' => 'Sécurité'],
     ];

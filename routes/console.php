@@ -18,7 +18,7 @@ Schedule::command('videos:transcode-local')
     ->everyThirtyMinutes()
     ->withoutOverlapping();
 
-// Taux de change live (ExchangeRate-API met à jour ~1×/jour) : on rafraîchit
-// currencies.rate_from_xof chaque jour pour une conversion d'affichage ET de
-// paiement (PayPal/crypto/KPay local) toujours à jour.
-Schedule::command('rates:update')->dailyAt('05:00')->withoutOverlapping();
+// Taux de change live (ExchangeRate-API) : UNE seule requête par jour, à
+// minuit, pour rafraîchir currencies.rate_from_xof (conversion d'affichage ET
+// de paiement PayPal/crypto/KPay local). Pas de polling fréquent.
+Schedule::command('rates:update')->dailyAt('00:00')->withoutOverlapping();
