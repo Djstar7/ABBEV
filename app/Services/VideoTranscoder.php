@@ -105,6 +105,10 @@ class VideoTranscoder
             '-c:v', 'libx264',
             '-preset', 'veryfast',
             '-crf', '23',
+            // libx264 + yuv420p exigent des dimensions PAIRES : on arrondit
+            // largeur/hauteur au multiple de 2 inférieur (ex: 1867x950 → 1866x950),
+            // sinon « width not divisible by 2 » et la conversion échoue.
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
             // Chroma 4:2:0 : indispensable pour la compatibilité iOS/Safari.
             '-pix_fmt', 'yuv420p',
             '-c:a', 'aac',
