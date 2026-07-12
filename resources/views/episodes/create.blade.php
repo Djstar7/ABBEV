@@ -106,7 +106,9 @@
         </div>
 
         <div class="flex justify-end gap-4">
-            <a href="{{ route('episodes.index', $season->media) }}" class="bg-dark-200 hover:bg-dark-300 text-white px-8 py-3 rounded-lg font-medium"><i class="fas fa-times mr-2"></i>Annuler</a>
+            <a href="{{ route('episodes.index', $season->media) }}" class="bg-dark-200 hover:bg-dark-300 text-white px-8 py-3 rounded-lg font-medium"
+               data-confirm="Annuler ? Les informations saisies seront perdues."
+               data-confirm-type="warning" data-confirm-title="Annuler la création" data-confirm-confirm="Oui, annuler"><i class="fas fa-times mr-2"></i>Annuler</a>
             <button type="submit" class="bg-gradient-to-r from-primary-500 to-primary-600 hover:shadow-lg hover:shadow-primary-500/50 text-white px-8 py-3 rounded-lg font-medium"><i class="fas fa-save mr-2"></i>Ajouter l'épisode</button>
         </div>
     </form>

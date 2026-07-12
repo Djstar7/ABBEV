@@ -705,6 +705,11 @@
                 const u=new URL(a.href,location.origin);
                 if(u.origin!==location.origin) return;
                 e.preventDefault();
+                // Lien à confirmer (ex: « Annuler » avec données déjà saisies) → modal.
+                if(a.hasAttribute('data-confirm') && typeof ConfirmModal!=='undefined' && ConfirmModal){
+                    ConfirmModal.open(ConfirmModal.readOpts(a), ()=>pjax(u.href));
+                    return;
+                }
                 pjax(u.href);
             }catch(ex){}
         },true);
@@ -724,13 +729,22 @@
                 warning: { icon:'fa-circle-exclamation',   ring:'cm-ring-warning', btn:'cm-btn-warning' },
                 primary: { icon:'fa-circle-question',      ring:'cm-ring-primary', btn:'cm-btn-primary' },
             };
-            let pending = null;
-            function open(form){
-                pending = form;
-                const t = TYPES[form.getAttribute('data-confirm-type')] || TYPES.danger;
-                elTitle.textContent = form.getAttribute('data-confirm-title') || "Confirmer l'action";
-                elMsg.textContent   = form.getAttribute('data-confirm') || 'Confirmer cette action ?';
-                elOk.textContent    = form.getAttribute('data-confirm-confirm') || 'Confirmer';
+            let onConfirm = null;
+            // Lit les options depuis un élément porteur de data-confirm (form OU lien).
+            function readOpts(el){
+                return {
+                    type:    el.getAttribute('data-confirm-type'),
+                    title:   el.getAttribute('data-confirm-title'),
+                    message: el.getAttribute('data-confirm'),
+                    confirm: el.getAttribute('data-confirm-confirm'),
+                };
+            }
+            function open(opts, cb){
+                onConfirm = cb;
+                const t = TYPES[opts.type] || TYPES.danger;
+                elTitle.textContent = opts.title   || "Confirmer l'action";
+                elMsg.textContent   = opts.message || 'Confirmer cette action ?';
+                elOk.textContent    = opts.confirm || 'Confirmer';
                 elIcon.className = 'fas ' + t.icon;
                 elRing.className = 'cm-ring ' + t.ring;
                 elOk.className   = 'cm-btn ' + t.btn;
@@ -738,19 +752,15 @@
                 document.body.style.overflow = 'hidden';
                 setTimeout(()=>elOk.focus(), 60);
             }
-            function close(){ root.classList.remove('is-open'); document.body.style.overflow=''; pending=null; }
-            elOk.addEventListener('click',()=>{
-                if(!pending) return close();
-                const f = pending; f.dataset.confirmed = '1'; close();
-                if(typeof f.requestSubmit === 'function') f.requestSubmit(); else f.submit();
-            });
+            function close(){ root.classList.remove('is-open'); document.body.style.overflow=''; onConfirm=null; }
+            elOk.addEventListener('click',()=>{ const cb = onConfirm; close(); if(cb) cb(); });
             elNo.addEventListener('click', close);
             root.addEventListener('click',(e)=>{ if(e.target===root) close(); });
             document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && root.classList.contains('is-open')) close(); });
-            return { open };
+            return { open, readOpts };
         })();
 
-        // Intercepte les soumissions à confirmer AVANT le loader/PJAX.
+        // Intercepte les soumissions de FORMULAIRE à confirmer AVANT le loader/PJAX.
         document.addEventListener('submit',(e)=>{
             const f = e.target;
             if(!f || !f.hasAttribute('data-confirm') || !ConfirmModal) return;
@@ -758,7 +768,10 @@
             // Formulaire invalide (champs requis) → on laisse la validation navigateur.
             if(typeof f.checkValidity === 'function' && !f.checkValidity()) return;
             e.preventDefault(); e.stopImmediatePropagation();
-            ConfirmModal.open(f);
+            ConfirmModal.open(ConfirmModal.readOpts(f), ()=>{
+                f.dataset.confirmed = '1';
+                if(typeof f.requestSubmit === 'function') f.requestSubmit(); else f.submit();
+            });
         }, true);
 
         // Interception des formulaires GET (recherche, filtres)

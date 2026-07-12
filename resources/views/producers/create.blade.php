@@ -53,7 +53,9 @@
             <button type="submit" class="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg transition flex-1">
                 <i class="fas fa-check mr-2"></i> Créer le producteur
             </button>
-            <a href="{{ route('producers.index') }}" class="bg-dark-200 hover:bg-dark-300 text-white px-6 py-3 rounded-lg transition text-center">
+            <a href="{{ route('producers.index') }}" class="bg-dark-200 hover:bg-dark-300 text-white px-6 py-3 rounded-lg transition text-center"
+               data-confirm="Annuler la création ? Les informations saisies seront perdues."
+               data-confirm-type="warning" data-confirm-title="Annuler la création" data-confirm-confirm="Oui, annuler">
                 <i class="fas fa-times mr-2"></i> Annuler
             </a>
         </div>
