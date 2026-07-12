@@ -447,26 +447,44 @@ class AuthApiController extends Controller
     }
 
     /**
-     * Mise à jour partielle du profil. Pour l'instant, seuls le pays et la
-     * devise sont éditables — l'app expose un sélecteur dans l'écran profil.
+     * Mise à jour partielle du profil : nom, photo (avatar), pays et devise.
+     * Tous les champs sont optionnels — on ne met à jour que ce qui est fourni.
      */
     public function updateMe(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'country_code' => 'required|string|size:2|exists:countries,code',
+            'name' => 'sometimes|string|min:2|max:255',
+            'avatar' => 'sometimes|image|mimes:jpeg,jpg,png,webp|max:4096',
+            'country_code' => 'sometimes|string|size:2|exists:countries,code',
             'currency_code' => 'nullable|string|size:3|exists:currencies,code',
         ]);
 
-        $locale = $this->resolveLocale(
-            $data['country_code'],
-            $data['currency_code'] ?? null,
-        );
-
         $user = $request->user();
-        $user->forceFill([
-            'country_code' => $locale['country_code'],
-            'currency_code' => $locale['currency_code'],
-        ])->save();
+
+        if (array_key_exists('name', $data)) {
+            $user->name = $data['name'];
+        }
+
+        // Photo de profil : stockée sur le disque public (servie avec CORS via
+        // /media/img/...). On supprime l'ancienne pour ne pas accumuler.
+        if ($request->hasFile('avatar')) {
+            if ($user->avatar_path) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($user->avatar_path);
+            }
+            $user->avatar_path = $request->file('avatar')->store('avatars', 'public');
+        }
+
+        // Pays/devise : on ne réaligne que si un pays est fourni.
+        if (! empty($data['country_code'])) {
+            $locale = $this->resolveLocale(
+                $data['country_code'],
+                $data['currency_code'] ?? null,
+            );
+            $user->country_code = $locale['country_code'];
+            $user->currency_code = $locale['currency_code'];
+        }
+
+        $user->save();
 
         return response()->json([
             'user' => $this->serializeUser($user->load(['country', 'currency'])),
@@ -479,6 +497,9 @@ class AuthApiController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'avatarUrl' => $user->avatar_path
+                ? rtrim(config('app.url'), '/').'/media/img/'.ltrim($user->avatar_path, '/')
+                : null,
             'role' => $user->role,
             'country_code' => $user->country_code,
             'currency_code' => $user->currency_code,
