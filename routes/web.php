@@ -136,6 +136,9 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
     Route::post('/producers/{user}/resend', [ProducerController::class, 'resend'])->name('producers.resend');
     Route::delete('/producers/{user}', [ProducerController::class, 'destroy'])->name('producers.destroy');
 
+    // Revenus producteurs (comptes dus + simulation des tarifs)
+    Route::get('/earnings', [App\Http\Controllers\ProducerEarningsController::class, 'index'])->name('earnings.index');
+
     // Assistants (direction artistique — modération des contenus)
     Route::get('/assistants', [App\Http\Controllers\AssistantController::class, 'index'])->name('assistants.index');
     Route::get('/assistants/create', [App\Http\Controllers\AssistantController::class, 'create'])->name('assistants.create');

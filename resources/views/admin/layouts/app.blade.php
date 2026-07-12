@@ -309,6 +309,7 @@
                 <div class="mt-8 pt-6 border-t border-dark-200">
                     <p class="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Contenu</p>
 
+                    @unless(auth()->user()->isAssistant())
                     <a href="{{ route('films.index') }}"
                        class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('films.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
                         <i class="fas fa-video w-5 mr-3"></i>
@@ -320,6 +321,7 @@
                         <i class="fas fa-tv w-5 mr-3"></i>
                         Séries
                     </a>
+                    @endunless
 
                     @if(auth()->user()->isAdmin() || auth()->user()->isAssistant())
                     @php $__pendingModeration = \App\Models\Media::where('moderation_status', 'pending')->count(); @endphp
@@ -353,6 +355,7 @@
                     </a>
                     @endif
 
+                    @unless(auth()->user()->isAssistant())
                     @php
                         $__activeUploadsQuery = \App\Models\BunnyUpload::whereNotIn('status', \App\Models\BunnyUpload::TERMINAL);
                         if (auth()->user()->role === 'producer') {
@@ -366,6 +369,7 @@
                         Upload vidéos
                         <span id="sidebar-upload-badge" class="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full bg-blue-500 text-white animate-pulse {{ $__activeUploads > 0 ? '' : 'hidden' }}">{{ $__activeUploads }}</span>
                     </a>
+                    @endunless
                 </div>
 
                 @if(auth()->user()->isAdmin())
@@ -413,6 +417,12 @@
                         <i class="fas fa-receipt w-5 mr-3"></i>
                         Transactions
                     </a>
+
+                    <a href="{{ route('earnings.index') }}"
+                       class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('earnings.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
+                        <i class="fas fa-coins w-5 mr-3"></i>
+                        Revenus producteurs
+                    </a>
                 </div>
 
                 <!-- Section Paramètres -->
@@ -436,7 +446,7 @@
                     </div>
                     <div class="ml-3 flex-1">
                         <p class="text-sm font-medium text-white">{{ auth()->user()->name ?? 'Admin' }}</p>
-                        <p class="text-xs text-gray-400">{{ auth()->user()->isProducer() ? 'Producteur' : 'Administrateur' }}</p>
+                        <p class="text-xs text-gray-400">{{ auth()->user()->isProducer() ? 'Producteur' : (auth()->user()->isAssistant() ? 'Assistant' : 'Administrateur') }}</p>
                     </div>
                     <form action="{{ route('admin.logout') }}" method="POST">
                         @csrf
