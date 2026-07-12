@@ -34,6 +34,16 @@ class AuthApiController extends Controller
             'phone' => 'nullable|string|max:32',
             'country_code' => 'required|string|size:2|exists:countries,code',
             'currency_code' => 'nullable|string|size:3|exists:currencies,code',
+        ], [
+            'name.required'      => 'Le nom est requis.',
+            'email.required'     => "L'adresse email est requise.",
+            'email.email'        => "L'adresse email n'est pas valide.",
+            'email.unique'       => 'Cette adresse email est déjà utilisée.',
+            'password.required'  => 'Le mot de passe est requis.',
+            'password.min'       => 'Le mot de passe doit contenir au moins 8 caractères.',
+            'password.confirmed' => 'Les mots de passe ne correspondent pas.',
+            'country_code.required' => 'Veuillez sélectionner votre pays.',
+            'country_code.exists'   => 'Pays invalide.',
         ]);
 
         $locale = $this->resolveLocale($data['country_code'], $data['currency_code'] ?? null);
