@@ -110,6 +110,9 @@ Route::middleware(['auth', 'role:admin,producer'])->group(function () {
 */
 Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::resource('categories', CategoryController::class);
+    // Annulation d'une séance (statut → canceled). Route hors resource.
+    Route::post('screenings/{screening}/cancel', [ScreeningController::class, 'cancel'])
+        ->name('screenings.cancel');
     Route::resource('screenings', ScreeningController::class);
     Route::get('/settings', [App\Http\Controllers\SettingController::class, 'index'])->name('settings.index');
 });
