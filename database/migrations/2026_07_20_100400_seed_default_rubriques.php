@@ -27,9 +27,9 @@ return new class extends Migration
                 'updated_at' => $now,
             ],
             [
-                'name' => 'Premier plan',
+                'name' => 'Exclusivités',
                 'slug' => 'premier-plan',
-                'description' => 'Contenus rares mis en avant.',
+                'description' => 'Pépites rares et contenus mis en avant, rien que pour vous.',
                 'content_type' => 'media',
                 'source_filter' => 'rare',
                 'sort_order' => 2,

@@ -44,7 +44,11 @@
                             @endif
                         </td>
                         <td class="px-4 py-3 text-gray-300">
-                            {{ $r->content_type === 'oeuvre' ? $r->oeuvres_count . ' œuvre(s)' : '—' }}
+                            @if($r->content_type === 'oeuvre')
+                                {{ $r->oeuvres_count }} œuvre(s)
+                            @else
+                                {{ $r->media_count ?? 0 }} contenu(s)
+                            @endif
                         </td>
                         <td class="px-4 py-3 text-gray-300">
                             @if($r->plans->isEmpty())

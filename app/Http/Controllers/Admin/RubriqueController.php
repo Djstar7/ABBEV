@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Media;
 use App\Models\Rubrique;
 use App\Models\SubscriptionPlan;
 use Illuminate\Http\Request;
@@ -20,6 +21,18 @@ class RubriqueController extends Controller
             ->withCount('oeuvres')
             ->with('plans:id,name')
             ->get();
+
+        // Comptage des médias éligibles pour les rubriques de type « media »
+        // (mêmes filtres que l'API mobile : contenu publié + filtre 'rare').
+        foreach ($rubriques as $r) {
+            if ($r->content_type === 'media') {
+                $q = Media::query()->published();
+                if ($r->source_filter === 'rare') {
+                    $q->rare();
+                }
+                $r->media_count = $q->count();
+            }
+        }
 
         return view('rubriques.index', compact('rubriques'));
     }
