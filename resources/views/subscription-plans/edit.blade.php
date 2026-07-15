@@ -192,6 +192,8 @@
                     </label>
                 </div>
 
+                @include('subscription-plans._rubriques')
+
                 <!-- Subscription Info -->
                 <div class="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                     <p class="text-blue-300 text-sm">

@@ -70,6 +70,7 @@ class MediaController extends Controller
             'banner'    => 'nullable|image|mimes:jpeg,png,jpg,webp|max:8192',
 
             'is_featured'  => 'nullable|boolean',
+            'is_rare'      => 'nullable|boolean',
             'published_at' => 'nullable|date',
             'tier'         => 'nullable|in:classique,standard,premium',
         ]);
@@ -151,6 +152,7 @@ class MediaController extends Controller
             'cover'     => 'nullable|image|mimes:jpeg,png,jpg,webp|max:4096',
             'banner'    => 'nullable|image|mimes:jpeg,png,jpg,webp|max:8192',
             'is_featured'  => 'nullable|boolean',
+            'is_rare'      => 'nullable|boolean',
             'published_at' => 'nullable|date',
             'tier'         => 'nullable|in:classique,standard,premium',
         ]);
@@ -247,6 +249,7 @@ class MediaController extends Controller
 
         $data['slug']        = $this->uniqueSlug($validated['title'], $ignore?->id);
         $data['is_featured'] = (bool) $request->boolean('is_featured');
+        $data['is_rare']     = (bool) $request->boolean('is_rare');
 
         // Conversion durée (minutes → secondes) — pour les films seulement.
         // Pour une série, la durée a moins de sens : on la laisse à 0 et on

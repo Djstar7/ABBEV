@@ -24,7 +24,9 @@ class SubscriptionPlanController extends Controller
 
     public function create()
     {
-        return view('subscription-plans.create');
+        return view('subscription-plans.create', [
+            'rubriques' => \App\Models\Rubrique::ordered()->get(),
+        ]);
     }
 
     public function store(Request $request)
@@ -45,7 +47,8 @@ class SubscriptionPlanController extends Controller
         $validated['is_active'] = $request->has('is_active');
         $validated['is_popular'] = $request->has('is_popular');
 
-        SubscriptionPlan::create($validated);
+        $plan = SubscriptionPlan::create($validated);
+        $plan->rubriques()->sync($request->input('rubriques', []));
 
         return redirect()->route('subscription-plans.index')
             ->with('success', 'Pack créé avec succès.');
@@ -53,8 +56,11 @@ class SubscriptionPlanController extends Controller
 
     public function edit(SubscriptionPlan $subscriptionPlan)
     {
-        $plan = $subscriptionPlan;
-        return view('subscription-plans.edit', compact('plan'));
+        $plan = $subscriptionPlan->load('rubriques:id');
+        return view('subscription-plans.edit', [
+            'plan' => $plan,
+            'rubriques' => \App\Models\Rubrique::ordered()->get(),
+        ]);
     }
 
     public function update(Request $request, SubscriptionPlan $subscriptionPlan)
@@ -76,6 +82,7 @@ class SubscriptionPlanController extends Controller
         $validated['is_popular'] = $request->has('is_popular');
 
         $subscriptionPlan->update($validated);
+        $subscriptionPlan->rubriques()->sync($request->input('rubriques', []));
 
         return redirect()->route('subscription-plans.index')
             ->with('success', 'Pack mis à jour avec succès.');

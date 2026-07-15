@@ -348,6 +348,12 @@
                         Séances cinéma
                     </a>
 
+                    <a href="{{ route('rubriques.index') }}"
+                       class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('rubriques.*') || request()->routeIs('oeuvres.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
+                        <i class="fas fa-book-open w-5 mr-3"></i>
+                        Rubriques
+                    </a>
+
                     <a href="{{ route('admin.bunny.library') }}"
                        class="flex items-center px-4 py-3 text-sm rounded-lg transition-all {{ request()->routeIs('admin.bunny.library') || request()->routeIs('admin.bunny.videos.*') ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md' : 'text-gray-300 hover:bg-dark-200 hover:text-white' }}">
                         <i class="fas fa-cloud w-5 mr-3"></i>

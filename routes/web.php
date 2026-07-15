@@ -114,6 +114,13 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::post('screenings/{screening}/cancel', [ScreeningController::class, 'cancel'])
         ->name('screenings.cancel');
     Route::resource('screenings', ScreeningController::class);
+
+    // Rubriques (sections gated par forfait) + œuvres (documents/PDF).
+    Route::resource('rubriques', App\Http\Controllers\Admin\RubriqueController::class)
+        ->except(['show']);
+    Route::resource('oeuvres', App\Http\Controllers\Admin\OeuvreController::class)
+        ->except(['show']);
+
     Route::get('/settings', [App\Http\Controllers\SettingController::class, 'index'])->name('settings.index');
 });
 

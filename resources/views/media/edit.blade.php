@@ -195,6 +195,12 @@
                         <span class="text-white font-medium">Mettre en vedette</span>
                     </div>
                 </label>
+                <label class="flex items-center gap-3 p-4 bg-dark-50 rounded-lg cursor-pointer">
+                    <input type="checkbox" name="is_rare" value="1" {{ old('is_rare', $medium->is_rare) ? 'checked' : '' }} class="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded">
+                    <div>
+                        <span class="text-white font-medium">Contenu rare (Premier plan)</span>
+                    </div>
+                </label>
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-2">Date de publication</label>
                     <input type="datetime-local" name="published_at" value="{{ old('published_at', optional($medium->published_at)->format('Y-m-d\TH:i')) }}" class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-3 text-white">

@@ -190,6 +190,8 @@
                         </span>
                     </label>
                 </div>
+
+                @include('subscription-plans._rubriques')
             </div>
         </div>
 
