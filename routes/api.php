@@ -147,6 +147,16 @@ Route::prefix('v1')->group(function () {
     Route::get('/featured',                         [MediaApiController::class, 'featured']);
 
     // -------------------------------------------------------------
+    // Rubriques (sections gated par forfait). Auth requise pour résoudre
+    // l'accès selon l'abonnement de l'utilisateur ; les rubriques
+    // verrouillées sont masquées.
+    // -------------------------------------------------------------
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/rubriques', [App\Http\Controllers\Api\RubriqueApiController::class, 'index']);
+        Route::get('/rubriques/{rubrique}/contents', [App\Http\Controllers\Api\RubriqueApiController::class, 'contents']);
+    });
+
+    // -------------------------------------------------------------
     // PUBLIC — compat ancienne route
     // -------------------------------------------------------------
     Route::get('/media',                 [MediaApiController::class, 'index']);
