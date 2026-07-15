@@ -40,6 +40,7 @@ class Media extends Model
         'cover_path',
         'published_at',
         'is_featured',
+        'is_rare',
         'views_count',
         'producer_views',
     ];
@@ -48,6 +49,7 @@ class Media extends Model
         'published_at'   => 'datetime',
         'reviewed_at'    => 'datetime',
         'is_featured'    => 'boolean',
+        'is_rare'        => 'boolean',
         'video_metadata' => 'array',
         'producer_views' => 'integer',
     ];
@@ -110,6 +112,12 @@ class Media extends Model
     public function isApproved(): bool
     {
         return $this->moderation_status === 'approved';
+    }
+
+    /** Contenus « rares » mis en avant (rubrique « Premier plan »). */
+    public function scopeRare(Builder $query): Builder
+    {
+        return $query->where('is_rare', true);
     }
 
     /**

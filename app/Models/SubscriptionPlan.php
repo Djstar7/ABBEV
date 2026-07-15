@@ -24,4 +24,15 @@ class SubscriptionPlan extends Model
     {
         return $this->hasMany(UserSubscription::class);
     }
+
+    /** Rubriques débloquées par ce forfait. */
+    public function rubriques()
+    {
+        return $this->belongsToMany(
+            Rubrique::class,
+            'plan_rubrique',
+            'subscription_plan_id',
+            'rubrique_id',
+        );
+    }
 }
