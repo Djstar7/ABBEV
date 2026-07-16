@@ -50,7 +50,7 @@ class RubriqueApiController extends Controller
             ]);
         }
 
-        // Rubrique 'media' : contenu rare (ou tout média approuvé si pas de filtre).
+        // Rubrique 'media' : Avant première (ou tout média approuvé si pas de filtre).
         $query = Media::query()->published();
         if ($rubrique->source_filter === 'rare') {
             $query->rare();

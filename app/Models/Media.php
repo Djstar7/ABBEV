@@ -114,7 +114,7 @@ class Media extends Model
         return $this->moderation_status === 'approved';
     }
 
-    /** Contenus « rares » mis en avant (rubrique « A.Premiere »). */
+    /** Contenus « rares » mis en avant (rubrique « Nouveautés »). */
     public function scopeRare(Builder $query): Builder
     {
         return $query->where('is_rare', true);

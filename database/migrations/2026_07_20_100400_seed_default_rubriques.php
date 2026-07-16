@@ -5,8 +5,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Crée les deux rubriques de base décrites au cahier des charges :
- *   - « Œuvre adaptable » : livres/documents d'inspiration (type oeuvre).
- *   - « A.Premiere » : contenu rare mis en avant (type media, filtre 'rare').
+ *   - « Œuvres Adaptables » : livres/documents d'inspiration (type oeuvre).
+ *   - « Nouveautés » : Avant première mis en avant (type media, filtre 'rare').
  * Idempotent : n'insère que si le slug n'existe pas déjà.
  */
 return new class extends Migration
@@ -16,7 +16,7 @@ return new class extends Migration
         $now = now();
         $rows = [
             [
-                'name' => 'Œuvre adaptable',
+                'name' => 'Œuvres Adaptables',
                 'slug' => 'oeuvre-adaptable',
                 'description' => "Livres et documents d'inspiration à lire dans l'app.",
                 'content_type' => 'oeuvre',
@@ -27,7 +27,7 @@ return new class extends Migration
                 'updated_at' => $now,
             ],
             [
-                'name' => 'A.Premiere',
+                'name' => 'Nouveautés',
                 'slug' => 'premier-plan',
                 'description' => 'Contenus rares mis en avant.',
                 'content_type' => 'media',

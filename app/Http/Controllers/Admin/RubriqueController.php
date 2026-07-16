@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 /**
  * CRUD des rubriques (admin) : sections gated par forfait, de type « œuvre »
- * (documents/PDF) ou « media » (films/séries, ex. contenu rare).
+ * (documents/PDF) ou « media » (films/séries, ex. Avant première).
  */
 class RubriqueController extends Controller
 {

@@ -28,7 +28,7 @@
         <select name="source_filter"
                 class="w-full bg-dark-50 border border-dark-200 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500">
             <option value="">Assignation manuelle (à venir)</option>
-            <option value="rare" @selected(old('source_filter', $r->source_filter ?? '') === 'rare')>Contenu rare (flag « rare »)</option>
+            <option value="rare" @selected(old('source_filter', $r->source_filter ?? '') === 'rare')>Avant première (flag « rare »)</option>
         </select>
         <p class="text-gray-500 text-xs mt-1">Utilisé uniquement pour les rubriques de type « Médias ».</p>
     </div>

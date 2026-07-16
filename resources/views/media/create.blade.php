@@ -259,8 +259,8 @@
                 <label class="flex items-center gap-3 p-4 bg-dark-50 rounded-lg cursor-pointer hover:bg-dark-200 transition-all">
                     <input type="checkbox" name="is_rare" value="1" {{ old('is_rare') ? 'checked' : '' }} class="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded">
                     <div>
-                        <span class="text-white font-medium">Contenu rare (A.Premiere)</span>
-                        <p class="text-gray-400 text-sm">Apparaîtra dans la rubrique « A.Premiere ».</p>
+                        <span class="text-white font-medium">Avant première (Nouveautés)</span>
+                        <p class="text-gray-400 text-sm">Apparaîtra dans la rubrique « Nouveautés ».</p>
                     </div>
                 </label>
                 <div>

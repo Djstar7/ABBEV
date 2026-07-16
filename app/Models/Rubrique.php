@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * Rubrique : section thématique dont l'accès dépend des forfaits (pivot
  * plan_rubrique). Deux natures de contenu : 'oeuvre' (documents) ou 'media'
- * (films/séries, ex. contenu rare via source_filter = 'rare').
+ * (films/séries, ex. Avant première via source_filter = 'rare').
  */
 class Rubrique extends Model
 {
