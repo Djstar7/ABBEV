@@ -198,7 +198,7 @@
                 <label class="flex items-center gap-3 p-4 bg-dark-50 rounded-lg cursor-pointer">
                     <input type="checkbox" name="is_rare" value="1" {{ old('is_rare', $medium->is_rare) ? 'checked' : '' }} class="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded">
                     <div>
-                        <span class="text-white font-medium">Contenu rare (Premier plan)</span>
+                        <span class="text-white font-medium">Contenu rare (A.Premiere)</span>
                     </div>
                 </label>
                 <div>

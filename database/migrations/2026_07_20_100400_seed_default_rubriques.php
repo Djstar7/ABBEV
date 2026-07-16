@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Crée les deux rubriques de base décrites au cahier des charges :
  *   - « Œuvre adaptable » : livres/documents d'inspiration (type oeuvre).
- *   - « Premier plan » : contenu rare mis en avant (type media, filtre 'rare').
+ *   - « A.Premiere » : contenu rare mis en avant (type media, filtre 'rare').
  * Idempotent : n'insère que si le slug n'existe pas déjà.
  */
 return new class extends Migration
@@ -27,7 +27,7 @@ return new class extends Migration
                 'updated_at' => $now,
             ],
             [
-                'name' => 'Premier plan',
+                'name' => 'A.Premiere',
                 'slug' => 'premier-plan',
                 'description' => 'Contenus rares mis en avant.',
                 'content_type' => 'media',

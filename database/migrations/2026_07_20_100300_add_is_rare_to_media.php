@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Flag « rare » sur les médias (films/séries) : alimente la rubrique
- * « Premier plan » (contenu rare mis en avant).
+ * « A.Premiere » (contenu rare mis en avant).
  */
 return new class extends Migration
 {
