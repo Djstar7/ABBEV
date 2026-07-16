@@ -498,7 +498,7 @@ class AuthApiController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'avatarUrl' => $user->avatar_path
-                ? rtrim(config('app.url'), '/').'/media/img/'.ltrim($user->avatar_path, '/')
+                ? url('/media/img/'.ltrim($user->avatar_path, '/'))
                 : null,
             'role' => $user->role,
             'country_code' => $user->country_code,
