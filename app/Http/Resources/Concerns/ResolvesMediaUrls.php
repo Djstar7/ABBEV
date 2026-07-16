@@ -27,6 +27,11 @@ trait ResolvesMediaUrls
         // Image locale : on la sert via la route CORS `/media/img/{path}` pour
         // qu'elle s'affiche aussi sur Flutter Web (CanvasKit exige le CORS).
         // Fonctionne également sur mobile (Android/iOS).
-        return rtrim(config('app.url'), '/') . '/media/img/' . ltrim($path, '/');
+        //
+        // On construit l'URL à partir de l'HÔTE DE LA REQUÊTE (url() suit le
+        // host entrant) plutôt que de config('app.url') qui peut être périmé
+        // (IP/port de dev qui changent). L'app reçoit ainsi toujours une URL
+        // joignable, quelle que soit l'adresse utilisée pour atteindre l'API.
+        return url('/media/img/' . ltrim($path, '/'));
     }
 }

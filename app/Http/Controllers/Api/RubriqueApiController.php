@@ -106,6 +106,8 @@ class RubriqueApiController extends Controller
             return $path;
         }
 
-        return rtrim(config('app.url'), '/') . '/media/img/' . ltrim($path, '/');
+        // URL basée sur l'hôte de la requête (et non config('app.url') qui peut
+        // être périmé), pour rester joignable depuis l'app quelle que soit l'IP.
+        return url('/media/img/' . ltrim($path, '/'));
     }
 }
